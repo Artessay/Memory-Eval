@@ -45,9 +45,11 @@ def compute_multiple_choice_accuracy(predictions: List[str], references: List[st
     for pred, ref in zip(predictions, references):
         extracted = extract_choice(pred)
         if extracted is None:
-            # Fallback: check if reference letter appears anywhere
-            extracted = extract_choice(ref)
-            if extracted and extracted.lower() in pred.lower():
+            # Fallback: check if reference letter appears as a standalone token
+            ref_letter = extract_choice(ref)
+            if ref_letter and re.search(
+                rf"(?<![A-Za-z]){re.escape(ref_letter)}(?![A-Za-z])", pred, re.IGNORECASE
+            ):
                 correct += 1
         elif extracted.upper() == ref.strip().upper():
             correct += 1
