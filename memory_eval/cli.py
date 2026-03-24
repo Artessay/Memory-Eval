@@ -59,7 +59,7 @@ def list_cmd(show_tasks: bool, show_models: bool):
 @click.option("--max-tokens", default=512, show_default=True, help="Max tokens per response.")
 @click.option("--temperature", default=0.0, show_default=True, help="Sampling temperature.")
 @click.option("--limit", default=None, type=int, help="Limit number of samples (for testing).")
-@click.option("--subset", default="hard", show_default=True, help="Dataset subset (for HealthBench: hard/consensus).")
+@click.option("--subset", default="standard", show_default=True, help="Dataset subset.")
 def run_cmd(
     task_names,
     model_backend,

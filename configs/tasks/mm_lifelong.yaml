@@ -6,7 +6,6 @@ description: >
 dataset:
   name: CG-Bench/MM-Lifelong
   split: test
-  trust_remote_code: true
 generation:
   max_tokens: 10
   temperature: 0.0

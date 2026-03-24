@@ -8,8 +8,9 @@ dataset:
   subsets:
     hard: 1000 examples (most challenging)
     consensus: 3671 examples (physician-validated criteria)
+    standard: OSS eval split
   default_subset: hard
-  split: test
+  split: train
 generation:
   max_tokens: 1024
   temperature: 0.0

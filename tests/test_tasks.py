@@ -145,6 +145,30 @@ class TestHealthBenchTask:
         task = HealthBenchTask(config={"subset": "consensus"})
         assert task.config["subset"] == "consensus"
 
+    @patch("datasets.load_dataset")
+    def test_load_dataset_uses_hf_data_files_for_subset(self, mock_load_dataset):
+        mock_load_dataset.return_value = [{"prompt": "test"}]
+
+        from memory_eval.tasks.healthbench.task import HealthBenchTask
+
+        task = HealthBenchTask(config={"subset": "standard"})
+        samples = task.load_dataset()
+
+        assert samples == [{"prompt": "test"}]
+        mock_load_dataset.assert_called_once_with(
+            "openai/healthbench",
+            data_files="*_oss_eval.jsonl",
+            split="train",
+        )
+
+    def test_load_dataset_rejects_unknown_subset(self):
+        from memory_eval.tasks.healthbench.task import HealthBenchTask
+
+        task = HealthBenchTask(config={"subset": "unknown"})
+
+        with pytest.raises(ValueError, match="Invalid HealthBench subset"):
+            task.load_dataset()
+
 
 class TestBaseTaskResult:
     def test_task_result_creation(self):

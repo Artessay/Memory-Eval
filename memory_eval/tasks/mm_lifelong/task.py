@@ -56,7 +56,6 @@ class MMLifelongTask(BaseTask):
         ds = load_dataset(
             self.dataset_name,
             split=self.config.get("split", self.dataset_split),
-            trust_remote_code=True,
         )
         samples = []
         for item in ds:

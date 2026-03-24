@@ -1,5 +1,6 @@
 """HealthBench task: Medical conversation rubric-based evaluation."""
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from memory_eval.tasks.base import BaseTask
@@ -18,6 +19,13 @@ SYSTEM_PROMPT = (
 )
 
 
+SUBSET_FILE_PATTERNS = {
+    "hard": "hard_*.jsonl",
+    "consensus": "consensus_*.jsonl",
+    "standard": "*_oss_eval.jsonl",
+}
+
+
 @TaskRegistry.register("healthbench")
 class HealthBenchTask(BaseTask):
     """
@@ -27,7 +35,8 @@ class HealthBenchTask(BaseTask):
     physician-created rubrics.
 
     Dataset: openai/healthbench on HuggingFace
-    Subsets: 'hard' (1000 examples) or 'consensus' (3671 examples)
+    Subsets: 'hard' (1000 examples), 'consensus' (3671 examples),
+    or 'standard' (OSS eval split)
     """
 
     task_name = "healthbench"
@@ -36,11 +45,47 @@ class HealthBenchTask(BaseTask):
         "physician-created rubrics for accuracy, completeness, and safety."
     )
     dataset_name = "openai/healthbench"
-    dataset_split = "test"
+    dataset_split = "train"
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
         self._grader_model = None
+
+    def _get_subset(self) -> str:
+        subset = self.config.get("subset", "standard")
+        if subset not in SUBSET_FILE_PATTERNS:
+            valid_subsets = ", ".join(sorted(SUBSET_FILE_PATTERNS))
+            raise ValueError(
+                f"Invalid HealthBench subset: {subset}. "
+                f"Expected one of: {valid_subsets}"
+            )
+        return subset
+
+    def _get_data_files(self, subset: str) -> str:
+        return SUBSET_FILE_PATTERNS[subset]
+
+    def _load_from_local_dir(self, data_dir: Path, subset: str) -> List[Dict[str, Any]]:
+        file_pattern = self._get_data_files(subset)
+        if subset == "standard":
+            files = [path for path in data_dir.glob(file_pattern) if "meta" not in path.name]
+        else:
+            files = list(data_dir.glob(file_pattern))
+
+        if not files:
+            raise FileNotFoundError(
+                f"No HealthBench files matching '{file_pattern}' found in {data_dir}"
+            )
+
+        records = []
+        for path in sorted(files):
+            with path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if line:
+                        import json
+
+                        records.append(json.loads(line))
+        return records
 
     def load_dataset(self) -> List[Dict[str, Any]]:
         """Load HealthBench dataset from HuggingFace."""
@@ -49,12 +94,15 @@ class HealthBenchTask(BaseTask):
         except ImportError as exc:
             raise ImportError("datasets package required: pip install datasets") from exc
 
-        subset = self.config.get("subset", "hard")
+        subset = self._get_subset()
+        data_dir = self.config.get("data_dir")
+        if data_dir:
+            return self._load_from_local_dir(Path(data_dir), subset)
+
         ds = load_dataset(
             self.dataset_name,
-            subset,
-            split=self.config.get("split", self.dataset_split),
-            trust_remote_code=True,
+            data_files=self._get_data_files(subset),
+            split=self.config.get("split", "train"),
         )
         return [dict(item) for item in ds]
 

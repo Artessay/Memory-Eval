@@ -1,0 +1,1 @@
+memory-eval run --task healthbench --model-backend azure --model-name gpt-4o

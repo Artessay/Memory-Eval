@@ -31,12 +31,15 @@ class HuggingFaceModel(BaseModel):
         _device = device or ("cuda" if _torch.cuda.is_available() else "cpu")
         _dtype = getattr(_torch, torch_dtype) if torch_dtype != "auto" else "auto"
 
-        self._tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        self._tokenizer = AutoTokenizer.from_pretrained(
+            model_name, 
+            # trust_remote_code=True, --- IGNORE ---
+        )
         self._model = AutoModelForCausalLM.from_pretrained(
             model_name,
             device_map=_device,
             torch_dtype=_dtype,
-            trust_remote_code=True,
+            # trust_remote_code=True, --- IGNORE ---
         )
         self._model.eval()
 

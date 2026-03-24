@@ -102,6 +102,10 @@ class RetryHandler:
                 last_error = exc
                 if attempt >= self.max_retries or not self.is_retryable_error(exc):
                     raise
+                print(
+                    f"Operation failed with retryable error: {exc}.\n"
+                    f"Retrying attempt {attempt + 1}/{self.max_retries}..."
+                )
                 self._sleep(self.compute_delay(attempt))
 
         if last_error is not None:
