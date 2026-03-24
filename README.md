@@ -1,10 +1,10 @@
 # Memory-Eval
 
-An evaluation benchmark for **Lifelong Understanding** tasks, following the design principles of [`lm-evaluation-harness`](https://github.com/EleutherAI/lm-evaluation-harness) and [`LMMs-Eval`](https://github.com/EvolvingLMMs-Lab/lmms-eval).
+An evaluation benchmark for **Lifelong Understanding** tasks.
 
 ## Overview
 
-Memory-Eval provides a unified framework for evaluating large language models (LLMs) and multimodal models on tasks that require sustained knowledge, temporal reasoning, and long-horizon understanding.
+Memory-Eval provides a unified framework for evaluating large language models (LLMs) on tasks that require sustained knowledge, temporal reasoning, and long-horizon understanding.
 
 ### Supported Tasks
 
@@ -22,13 +22,26 @@ Memory-Eval provides a unified framework for evaluating large language models (L
 
 ## Installation
 
+### Install via PyPI
+
+Create and activate a conda environment:
+
 ```bash
-pip install -e .
+conda create -n memory-eval python=3.13 -y
+conda activate memory-eval
 ```
 
-For HuggingFace model support:
+Install packages using `uv`:
+
 ```bash
-pip install -e ".[hf]"
+export UV_PROJECT_ENVIRONMENT="$(python -c 'import sys; print(sys.prefix)')"
+uv sync
+```
+
+Install all optional dependencies:
+
+```bash
+uv sync --extra all
 ```
 
 ## Quick Start
@@ -173,4 +186,4 @@ tests/
 
 ## License
 
-MIT
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
