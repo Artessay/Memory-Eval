@@ -2,11 +2,12 @@
 
 import base64
 import io
+import json
 from typing import Any, Dict, List, Optional
 
 from memory_eval.tasks.base import BaseTask
 from memory_eval.tasks.registry import TaskRegistry
-from memory_eval.metrics.accuracy import compute_multiple_choice_accuracy, extract_choice
+from memory_eval.metrics.accuracy import compute_exact_match, compute_multiple_choice_accuracy
 
 
 SYSTEM_PROMPT = (
@@ -21,6 +22,10 @@ Options:
 {options}
 
 Answer with the letter of the correct option only (e.g., A, B, C, or D)."""
+
+OPEN_ENDED_QUESTION_TEMPLATE = """{question}
+
+Answer as concisely as possible using only the final answer."""
 
 
 @TaskRegistry.register("mm_lifelong")
@@ -41,25 +46,42 @@ class MMLifelongTask(BaseTask):
     )
     dataset_name = "CG-Bench/MM-Lifelong"
     dataset_split = "test"
+    split_files = {
+        "train": [("month/train.json", "train")],
+        "val": [("month/val.json", "val")],
+        "test": [("day/test.json", "test_day"), ("week/test.json", "test_week")],
+        "test_day": [("day/test.json", "test_day")],
+        "test_week": [("week/test.json", "test_week")],
+    }
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
         self._dataset = None
 
     def load_dataset(self) -> List[Dict[str, Any]]:
-        """Load MM-Lifelong dataset from HuggingFace."""
+        """Load MM-Lifelong dataset from raw HuggingFace JSON files."""
         try:
-            from datasets import load_dataset
+            from huggingface_hub import hf_hub_download
         except ImportError as exc:
-            raise ImportError("datasets package required: pip install datasets") from exc
+            raise ImportError("huggingface_hub package required via datasets dependency") from exc
 
-        ds = load_dataset(
-            self.dataset_name,
-            split=self.config.get("split", self.dataset_split),
-        )
+        split_name = self.config.get("split", self.dataset_split)
+        repo_files = self.split_files.get(split_name)
+        if repo_files is None:
+            valid_splits = ", ".join(sorted(self.split_files))
+            raise ValueError(f"Invalid MM-Lifelong split '{split_name}'. Expected one of: {valid_splits}")
+
         samples = []
-        for item in ds:
-            samples.append(dict(item))
+        for repo_file, source_split in repo_files:
+            local_path = hf_hub_download(self.dataset_name, repo_file, repo_type="dataset")
+            with open(local_path, "r", encoding="utf-8") as file_obj:
+                items = json.load(file_obj)
+            for item in items:
+                sample = dict(item)
+                if "clue_interval" not in sample and "clue_intervals" in sample:
+                    sample["clue_interval"] = sample["clue_intervals"]
+                sample["source_split"] = source_split
+                samples.append(sample)
         return samples
 
     def _encode_image(self, image) -> str:
@@ -89,14 +111,25 @@ class MMLifelongTask(BaseTask):
                     break
         return "\n".join(options_text) if options_text else str(sample.get("options", ""))
 
+    def _has_options(self, sample: Dict[str, Any]) -> bool:
+        option_keys = ["option_A", "option_B", "option_C", "option_D", "option_E", "A", "B", "C", "D", "E"]
+        return bool(
+            sample.get("options")
+            or sample.get("choices")
+            or any(sample.get(key) is not None for key in option_keys)
+        )
+
     def build_messages(self, sample: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Build multimodal messages for the MM-Lifelong task."""
         question = sample.get("question", sample.get("Question", ""))
-        options_text = self._format_options(sample)
-        text_content = QUESTION_TEMPLATE.format(
-            question=question,
-            options=options_text,
-        )
+        if self._has_options(sample):
+            options_text = self._format_options(sample)
+            text_content = QUESTION_TEMPLATE.format(
+                question=question,
+                options=options_text,
+            )
+        else:
+            text_content = OPEN_ENDED_QUESTION_TEMPLATE.format(question=question)
 
         # Build content parts (text + optional image)
         content = []
@@ -130,7 +163,10 @@ class MMLifelongTask(BaseTask):
     ) -> Dict[str, float]:
         """Compute accuracy for MM-Lifelong."""
         references = [self.get_reference(s) for s in samples]
-        accuracy = compute_multiple_choice_accuracy(predictions, references)
+        if all(self._has_options(sample) for sample in samples):
+            accuracy = compute_multiple_choice_accuracy(predictions, references)
+        else:
+            accuracy = sum(compute_exact_match(pred, ref) for pred, ref in zip(predictions, references)) / len(predictions) if predictions else 0.0
 
         # Compute per-category accuracy if category info available
         metrics: Dict[str, float] = {"accuracy": accuracy}

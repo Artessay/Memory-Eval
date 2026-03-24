@@ -106,25 +106,54 @@ class HealthBenchTask(BaseTask):
         )
         return [dict(item) for item in ds]
 
+    def _append_chat_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        payload: Any,
+        default_role: str = "user",
+    ) -> int:
+        """Append normalized chat messages from dataset payloads."""
+        appended = 0
+
+        if isinstance(payload, str):
+            if payload:
+                messages.append({"role": default_role, "content": payload})
+                return 1
+            return 0
+
+        if isinstance(payload, dict):
+            role = payload.get("role", default_role)
+            content = payload.get("content", "")
+            if role in ("user", "assistant", "system") and content not in (None, ""):
+                messages.append({"role": role, "content": content})
+                return 1
+            return 0
+
+        if isinstance(payload, list):
+            for item in payload:
+                appended += self._append_chat_messages(
+                    messages,
+                    item,
+                    default_role=default_role,
+                )
+
+        return appended
+
     def build_messages(self, sample: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Build messages for the HealthBench task."""
         messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
         # The conversation history (all turns except the last assistant turn)
         conversation = sample.get("conversation") or []
-        if isinstance(conversation, list):
-            for turn in conversation:
-                role = turn.get("role", "user")
-                content = turn.get("content", "")
-                if role in ("user", "assistant", "system"):
-                    messages.append({"role": role, "content": content})
-        elif isinstance(conversation, str):
-            messages.append({"role": "user", "content": conversation})
+        appended = self._append_chat_messages(messages, conversation)
 
         # If no conversation found, use prompt field
-        if len(messages) == 1:
+        if appended == 0:
             prompt = sample.get("prompt") or sample.get("question", "")
-            messages.append({"role": "user", "content": prompt})
+            appended = self._append_chat_messages(messages, prompt)
+
+        if appended == 0:
+            messages.append({"role": "user", "content": ""})
 
         return messages
 

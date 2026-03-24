@@ -1,7 +1,9 @@
 """Tests for task implementations."""
 
-import pytest
+import json
 from unittest.mock import MagicMock, patch
+
+import pytest
 from memory_eval.tasks import register_builtin_tasks
 from memory_eval.tasks.base import BaseTask, TaskResult
 from memory_eval.tasks.registry import TaskRegistry
@@ -61,6 +63,55 @@ class TestMMLifelongTask:
         sample = {"answer": "b"}
         assert self.task.get_reference(sample) == "B"
 
+    def test_load_dataset_uses_raw_json_split_files(self, tmp_path):
+        day_test = tmp_path / "day_test.json"
+        week_test = tmp_path / "week_test.json"
+        day_test.write_text(
+            json.dumps([
+                {
+                    "question": "How many items are visible?",
+                    "answer": "5",
+                    "clue_intervals": [[1, 2]],
+                }
+            ]),
+            encoding="utf-8",
+        )
+        week_test.write_text(
+            json.dumps([
+                {
+                    "question": "What day is shown?",
+                    "answer": "Day 5",
+                    "clue_interval": [{"video_id": "day5", "intervals": [[3, 4]]}],
+                }
+            ]),
+            encoding="utf-8",
+        )
+
+        file_map = {
+            "day/test.json": str(day_test),
+            "week/test.json": str(week_test),
+        }
+
+        with patch("huggingface_hub.hf_hub_download", side_effect=lambda _repo, repo_file, repo_type: file_map[repo_file]) as mock_download:
+            from memory_eval.tasks.mm_lifelong.task import MMLifelongTask
+
+            task = MMLifelongTask(config={"split": "test"})
+            samples = task.load_dataset()
+
+        assert len(samples) == 2
+        assert samples[0]["source_split"] == "test_day"
+        assert samples[0]["clue_interval"] == [[1, 2]]
+        assert samples[1]["source_split"] == "test_week"
+        assert mock_download.call_count == 2
+
+    def test_load_dataset_rejects_unknown_split(self):
+        from memory_eval.tasks.mm_lifelong.task import MMLifelongTask
+
+        task = MMLifelongTask(config={"split": "unknown"})
+
+        with pytest.raises(ValueError, match="Invalid MM-Lifelong split"):
+            task.load_dataset()
+
     def test_evaluate(self):
         samples = [
             {"answer": "A"},
@@ -114,6 +165,21 @@ class TestHealthBenchTask:
         messages = self.task.build_messages(sample)
         assert len(messages) == 2
         assert messages[1]["content"] == "What are the symptoms of diabetes?"
+
+    def test_build_messages_with_prompt_message_list(self):
+        sample = {
+            "prompt": [
+                {
+                    "role": "user",
+                    "content": "Make a 3 months plan to address my mild postpartum depression.",
+                }
+            ],
+            "rubrics": [],
+        }
+        messages = self.task.build_messages(sample)
+        assert len(messages) == 2
+        assert messages[1]["role"] == "user"
+        assert messages[1]["content"] == "Make a 3 months plan to address my mild postpartum depression."
 
     def test_evaluate_without_grader(self):
         samples = [{"rubrics": [{"criterion": "test", "weight": 1.0}]}]
