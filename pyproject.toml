@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "memory-eval"
+version = "0.1.0"
+description = "An evaluation benchmark for Lifelong Understanding tasks"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = [
+    "openai>=1.0.0",
+    "datasets>=2.0.0",
+    "pyyaml>=6.0",
+    "rich>=13.0.0",
+    "click>=8.0.0",
+    "numpy>=1.24.0",
+    "tqdm>=4.0.0",
+    "Pillow>=9.0.0",
+    "requests>=2.28.0",
+]
+
+[project.optional-dependencies]
+hf = [
+    "transformers>=4.30.0",
+    "torch>=2.0.0",
+    "accelerate>=0.20.0",
+]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[project.scripts]
+memory-eval = "memory_eval.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["memory_eval"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
