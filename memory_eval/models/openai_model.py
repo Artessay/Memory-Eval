@@ -21,7 +21,7 @@ class OpenAIModel(BaseModel):
         api_key_env: Optional[str] = None,
         **kwargs,
     ):
-        super().__init__(model_name)
+        super().__init__(model_name, **kwargs)
         load_project_env()
 
         try:
@@ -38,15 +38,17 @@ class OpenAIModel(BaseModel):
     def generate(
         self,
         messages: List[Dict[str, Any]],
-        max_tokens: int = 512,
+        max_tokens: int = 4096,
         temperature: float = 0.0,
         **kwargs,
     ) -> str:
-        response = self._client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            **kwargs,
+        response = self._call_with_retry(
+            lambda: self._client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs,
+            )
         )
         return response.choices[0].message.content or ""

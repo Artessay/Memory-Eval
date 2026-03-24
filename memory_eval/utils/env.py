@@ -11,6 +11,7 @@ def load_project_env(*, force: bool = False) -> None:
     global _ENV_LOADED
 
     if _ENV_LOADED and not force:
+        print("Environment already loaded, skipping. Set force=True to reload.")
         return
 
     dotenv_path = find_dotenv(filename=".env", usecwd=True)

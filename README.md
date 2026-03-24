@@ -108,6 +108,29 @@ memory-eval validate --task mm_lifelong
 memory-eval validate --task healthbench
 ```
 
+## Retry Behavior
+
+The `openai` and `azure` backends automatically retry transient API failures with exponential backoff.
+By default they retry up to 4 times for:
+
+- HTTP `429` rate-limit responses
+- HTTP `5xx` server-side failures
+- OpenAI SDK connection and timeout errors
+
+Non-retryable client errors such as HTTP `400` are raised immediately.
+
+You can tune the retry behavior with environment variables:
+
+```bash
+export MEMORY_EVAL_MAX_RETRIES=4
+export MEMORY_EVAL_RETRY_BASE_DELAY=1.0
+export MEMORY_EVAL_RETRY_MAX_DELAY=30.0
+export MEMORY_EVAL_RETRY_JITTER=0.25
+```
+
+These settings also work when instantiating a model backend directly by passing
+`max_retries`, `retry_base_delay`, `retry_max_delay`, or `retry_jitter`.
+
 ## Environment Variables
 
 Set API keys for the providers you want to use:
