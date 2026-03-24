@@ -23,10 +23,10 @@ class TestTaskRegistry:
             TaskRegistry.get("nonexistent_task")
 
 
-class TestMMLonglivedTask:
+class TestMMLifelongTask:
     def setup_method(self):
-        from memory_eval.tasks.mm_lifelong.task import MMLonglivedTask
-        self.task = MMLonglivedTask()
+        from memory_eval.tasks.mm_lifelong.task import MMLifelongTask
+        self.task = MMLifelongTask()
 
     def test_task_name(self):
         assert self.task.task_name == "mm_lifelong"

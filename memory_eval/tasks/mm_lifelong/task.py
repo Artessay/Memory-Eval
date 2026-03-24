@@ -24,7 +24,7 @@ Answer with the letter of the correct option only (e.g., A, B, C, or D)."""
 
 
 @TaskRegistry.register("mm_lifelong")
-class MMLonglivedTask(BaseTask):
+class MMLifelongTask(BaseTask):
     """
     MM-Lifelong: A multimodal benchmark for lifelong visual understanding.
 

@@ -23,7 +23,7 @@ def extract_choice(text: str) -> Optional[str]:
     """Extract a letter choice (A/B/C/D/E) from model output."""
     text = text.strip()
     # Direct single-letter answer
-    match = re.match(r"^([A-Ea-e])[.\):\s]", text)
+    match = re.match(r"^([A-Ea-e])[.):\s]", text)
     if match:
         return match.group(1).upper()
     # "The answer is X" style

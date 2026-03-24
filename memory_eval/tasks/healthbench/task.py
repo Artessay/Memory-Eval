@@ -135,9 +135,13 @@ class HealthBenchTask(BaseTask):
                 for sample, pred in zip(samples, predictions)
             ]
             avg_score = sum(scores) / len(scores) if scores else 0.0
+            num_graded = sum(
+                1 for sample in samples
+                if sample.get("rubrics") or sample.get("criteria")
+            )
             return {
                 "rubric_score": avg_score,
-                "num_graded": len([s for s in scores if s is not None]),
+                "num_graded": num_graded,
             }
 
         # Without grader model: return length statistics as proxy
