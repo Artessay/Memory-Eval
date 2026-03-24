@@ -8,16 +8,10 @@ from unittest.mock import MagicMock, patch
 from memory_eval.models import register_builtin_models
 from memory_eval.models.base import BaseModel
 from memory_eval.models.registry import ModelRegistry
+from memory_eval.utils.retry import RetryHandler
 
 
 register_builtin_models()
-
-
-def configure_retry_state(model, max_retries=2):
-    model.max_retries = max_retries
-    model.retry_base_delay = 0.0
-    model.retry_max_delay = 0.0
-    model.retry_jitter = 0.0
 
 
 class TestModelRegistry:
@@ -42,7 +36,7 @@ class TestOpenAIModel:
             from memory_eval.models.openai_model import OpenAIModel
             model = OpenAIModel.__new__(OpenAIModel)
             model.model_name = "gpt-4o"
-            configure_retry_state(model)
+            model.retry_handler = RetryHandler(max_retries=2, base_delay=0.0, max_delay=0.0, jitter=0.0)
 
             mock_client = MagicMock()
             mock_response = MagicMock()
@@ -59,7 +53,7 @@ class TestOpenAIModel:
             from memory_eval.models.openai_model import OpenAIModel
             model = OpenAIModel.__new__(OpenAIModel)
             model.model_name = "gpt-4o"
-            configure_retry_state(model)
+            model.retry_handler = RetryHandler(max_retries=2, base_delay=0.0, max_delay=0.0, jitter=0.0)
 
             mock_client = MagicMock()
             mock_response = MagicMock()
@@ -75,53 +69,6 @@ class TestOpenAIModel:
             assert len(results) == 2
             assert all(r == "Answer" for r in results)
 
-    def test_generate_retries_on_rate_limit(self):
-        with patch("memory_eval.models.openai_model.OpenAIModel.__init__", return_value=None):
-            from memory_eval.models.openai_model import OpenAIModel
-
-            class RetryableError(Exception):
-                status_code = 429
-
-            model = OpenAIModel.__new__(OpenAIModel)
-            model.model_name = "gpt-4o"
-            configure_retry_state(model)
-            model._sleep = MagicMock()
-
-            mock_client = MagicMock()
-            mock_response = MagicMock()
-            mock_response.choices[0].message.content = "Recovered"
-            mock_client.chat.completions.create.side_effect = [RetryableError(), mock_response]
-            model._client = mock_client
-
-            result = model.generate([{"role": "user", "content": "Retry please"}])
-
-            assert result == "Recovered"
-            assert mock_client.chat.completions.create.call_count == 2
-            model._sleep.assert_called_once_with(0.0)
-
-    def test_generate_does_not_retry_on_bad_request(self):
-        with patch("memory_eval.models.openai_model.OpenAIModel.__init__", return_value=None):
-            from memory_eval.models.openai_model import OpenAIModel
-
-            class NonRetryableError(Exception):
-                status_code = 400
-
-            model = OpenAIModel.__new__(OpenAIModel)
-            model.model_name = "gpt-4o"
-            configure_retry_state(model)
-            model._sleep = MagicMock()
-
-            mock_client = MagicMock()
-            mock_client.chat.completions.create.side_effect = NonRetryableError()
-            model._client = mock_client
-
-            with pytest.raises(NonRetryableError):
-                model.generate([{"role": "user", "content": "Bad request"}])
-
-            assert mock_client.chat.completions.create.call_count == 1
-            model._sleep.assert_not_called()
-
-
 class TestAzureOpenAIModel:
     def test_generate(self):
         with patch("memory_eval.models.azure_model.AzureOpenAIModel.__init__", return_value=None):
@@ -129,7 +76,7 @@ class TestAzureOpenAIModel:
 
             model = AzureOpenAIModel.__new__(AzureOpenAIModel)
             model.model_name = "gpt-4o"
-            configure_retry_state(model)
+            model.retry_handler = RetryHandler(max_retries=2, base_delay=0.0, max_delay=0.0, jitter=0.0)
 
             mock_client = MagicMock()
             mock_response = MagicMock()
@@ -140,30 +87,6 @@ class TestAzureOpenAIModel:
             messages = [{"role": "user", "content": "Ping"}]
             result = model.generate(messages)
             assert result == "Azure answer"
-
-    def test_generate_retries_on_server_error(self):
-        with patch("memory_eval.models.azure_model.AzureOpenAIModel.__init__", return_value=None):
-            from memory_eval.models.azure_model import AzureOpenAIModel
-
-            class RetryableError(Exception):
-                status_code = 500
-
-            model = AzureOpenAIModel.__new__(AzureOpenAIModel)
-            model.model_name = "gpt-4o"
-            configure_retry_state(model)
-            model._sleep = MagicMock()
-
-            mock_client = MagicMock()
-            mock_response = MagicMock()
-            mock_response.choices[0].message.content = "Azure recovered"
-            mock_client.chat.completions.create.side_effect = [RetryableError(), mock_response]
-            model._client = mock_client
-
-            result = model.generate([{"role": "user", "content": "Retry please"}])
-
-            assert result == "Azure recovered"
-            assert mock_client.chat.completions.create.call_count == 2
-            model._sleep.assert_called_once_with(0.0)
 
     def test_init_prefers_api_key_when_available(self):
         from memory_eval.models.azure_model import AzureOpenAIModel

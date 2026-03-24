@@ -88,7 +88,7 @@ class AzureOpenAIModel(BaseModel):
         temperature: float = 0.0,
         **kwargs,
     ) -> str:
-        response = self._call_with_retry(
+        response = self.retry_handler.run(
             lambda: self._client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
