@@ -28,6 +28,9 @@ hf = [
     "torch",
     "accelerate",
 ]
+azure = [
+    "azure-identity",
+]
 dev = [
     "pytest",
     "pytest-asyncio",
@@ -35,6 +38,7 @@ dev = [
 
 all = [
     "memory_eval[dev]",
+    "memory_eval[azure]",
     "memory_eval[hf]",
 ]
 

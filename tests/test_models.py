@@ -1,5 +1,8 @@
 """Tests for model backends and registry."""
 
+import sys
+import types
+
 import pytest
 from unittest.mock import MagicMock, patch
 from memory_eval.models import register_builtin_models
@@ -13,6 +16,7 @@ register_builtin_models()
 class TestModelRegistry:
     def test_backends_registered(self):
         backends = ModelRegistry.list_backends()
+        assert "azure" in backends
         assert "openai" in backends
         assert "hf" in backends
 
@@ -61,3 +65,79 @@ class TestOpenAIModel:
             results = model.batch_generate(all_messages)
             assert len(results) == 2
             assert all(r == "Answer" for r in results)
+
+
+class TestAzureOpenAIModel:
+    def test_generate(self):
+        with patch("memory_eval.models.azure_model.AzureOpenAIModel.__init__", return_value=None):
+            from memory_eval.models.azure_model import AzureOpenAIModel
+
+            model = AzureOpenAIModel.__new__(AzureOpenAIModel)
+            model.model_name = "gpt-4o"
+
+            mock_client = MagicMock()
+            mock_response = MagicMock()
+            mock_response.choices[0].message.content = "Azure answer"
+            mock_client.chat.completions.create.return_value = mock_response
+            model._client = mock_client
+
+            messages = [{"role": "user", "content": "Ping"}]
+            result = model.generate(messages)
+            assert result == "Azure answer"
+
+    def test_init_prefers_api_key_when_available(self):
+        from memory_eval.models.azure_model import AzureOpenAIModel
+
+        with patch.dict(
+            "os.environ",
+            {
+                "AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com/",
+                "AZURE_OPENAI_API_KEY": "secret",
+            },
+            clear=True,
+        ):
+            with patch("openai.AzureOpenAI") as mock_client:
+                AzureOpenAIModel(model_name="gpt-4o")
+
+        mock_client.assert_called_once_with(
+            azure_endpoint="https://example.openai.azure.com/",
+            api_key="secret",
+            api_version="2024-08-01-preview",
+        )
+
+    def test_init_uses_aad_when_api_key_missing(self):
+        from memory_eval.models.azure_model import AzureOpenAIModel
+
+        token_provider = object()
+        mock_credential = MagicMock()
+        azure_identity = types.ModuleType("azure.identity")
+        azure_identity.DefaultAzureCredential = MagicMock(return_value=mock_credential)
+        azure_identity.get_bearer_token_provider = MagicMock(return_value=token_provider)
+        azure_package = types.ModuleType("azure")
+        azure_package.identity = azure_identity
+
+        with patch.dict(
+            "os.environ",
+            {"AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com/"},
+            clear=True,
+        ):
+            with patch.dict(
+                sys.modules,
+                {
+                    "azure": azure_package,
+                    "azure.identity": azure_identity,
+                },
+            ):
+                with patch("openai.AzureOpenAI") as mock_client:
+                    AzureOpenAIModel(model_name="gpt-4o")
+
+        azure_identity.DefaultAzureCredential.assert_called_once_with()
+        azure_identity.get_bearer_token_provider.assert_called_once_with(
+            mock_credential,
+            "https://cognitiveservices.azure.com/.default",
+        )
+        mock_client.assert_called_once_with(
+            azure_endpoint="https://example.openai.azure.com/",
+            azure_ad_token_provider=token_provider,
+            api_version="2024-08-01-preview",
+        )

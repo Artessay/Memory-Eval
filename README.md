@@ -18,11 +18,10 @@ Memory-Eval provides a unified framework for evaluating large language models (L
 | Backend | Description |
 |---------|-------------|
 | `openai` | OpenAI and any OpenAI-compatible API (Google, Anthropic, Together AI, xAI, etc.) |
+| `azure` | Azure OpenAI via API key or Microsoft Entra ID (`DefaultAzureCredential`) |
 | `hf` | HuggingFace Transformers (local models) |
 
 ## Installation
-
-### Install via PyPI
 
 Create and activate a conda environment:
 
@@ -42,6 +41,12 @@ Install all optional dependencies:
 
 ```bash
 uv sync --extra all
+```
+
+Install Azure support only:
+
+```bash
+uv sync --extra azure
 ```
 
 ## Quick Start
@@ -76,6 +81,24 @@ memory-eval run \
   --base-url https://generativelanguage.googleapis.com/v1beta/openai/ \
   --api-key-env GOOGLE_API_KEY \
   --subset hard
+
+# Use Azure OpenAI with an API key
+export AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+export AZURE_OPENAI_API_KEY=...
+memory-eval run \
+    --task healthbench \
+    --model-backend azure \
+    --model-name gpt-4o \
+    --subset hard
+
+# Use Azure OpenAI with Microsoft Entra ID / DefaultAzureCredential
+export AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+export AZURE_OPENAI_API_VERSION=2024-08-01-preview
+memory-eval run \
+    --task healthbench \
+    --model-backend azure \
+    --model-name gpt-4o \
+    --subset hard
 ```
 
 ### Validate task configuration
@@ -91,6 +114,9 @@ Set API keys for the providers you want to use:
 
 ```bash
 export OPENAI_API_KEY=...       # OpenAI models
+export AZURE_OPENAI_ENDPOINT=... # Azure OpenAI endpoint
+export AZURE_OPENAI_API_KEY=...  # Azure OpenAI API key (optional if using Entra ID)
+export AZURE_OPENAI_API_VERSION=2024-08-01-preview
 export GOOGLE_API_KEY=...       # Gemini models
 export ANTHROPIC_API_KEY=...    # Claude models
 export TOGETHER_API_KEY=...     # Together AI models
@@ -108,6 +134,9 @@ Example `.env`:
 
 ```bash
 OPENAI_API_KEY=your-openai-api-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_API_KEY=your-azure-openai-api-key
+AZURE_OPENAI_API_VERSION=2024-08-01-preview
 GOOGLE_API_KEY=your-google-api-key
 ANTHROPIC_API_KEY=your-anthropic-api-key
 TOGETHER_API_KEY=your-together-api-key
@@ -178,6 +207,7 @@ memory_eval/
 ├── models/
 │   ├── base.py         # Abstract model base class
 │   ├── registry.py     # Model backend registry
+│   ├── azure_model.py  # Azure OpenAI backend
 │   ├── openai_model.py # OpenAI / OpenAI-compatible API backend
 │   └── hf_model.py     # HuggingFace Transformers backend
 ├── tasks/
