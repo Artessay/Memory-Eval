@@ -93,6 +93,7 @@ class TestAzureOpenAIModel:
             {
                 "AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com/",
                 "AZURE_OPENAI_API_KEY": "secret",
+                "AZURE_OPENAI_API_VERSION": "2024-10-21",
             },
             clear=True,
         ):
@@ -102,7 +103,7 @@ class TestAzureOpenAIModel:
         mock_client.assert_called_once_with(
             azure_endpoint="https://example.openai.azure.com/",
             api_key="secret",
-            api_version="2024-08-01-preview",
+            api_version="2024-10-21",
         )
 
     def test_init_uses_aad_when_api_key_missing(self):
@@ -118,7 +119,10 @@ class TestAzureOpenAIModel:
 
         with patch.dict(
             "os.environ",
-            {"AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com/"},
+            {
+                "AZURE_OPENAI_ENDPOINT": "https://example.openai.azure.com/",
+                "OPENAI_API_VERSION": "2024-10-21",
+            },
             clear=True,
         ):
             with patch.dict(
@@ -139,5 +143,5 @@ class TestAzureOpenAIModel:
         mock_client.assert_called_once_with(
             azure_endpoint="https://example.openai.azure.com/",
             azure_ad_token_provider=token_provider,
-            api_version="2024-08-01-preview",
+            api_version="2024-10-21",
         )

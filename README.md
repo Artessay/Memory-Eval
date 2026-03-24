@@ -116,7 +116,8 @@ Set API keys for the providers you want to use:
 export OPENAI_API_KEY=...       # OpenAI models
 export AZURE_OPENAI_ENDPOINT=... # Azure OpenAI endpoint
 export AZURE_OPENAI_API_KEY=...  # Azure OpenAI API key (optional if using Entra ID)
-export AZURE_OPENAI_API_VERSION=2024-08-01-preview
+export AZURE_OPENAI_API_VERSION=... # Required for Azure OpenAI; use a version supported by your resource
+export OPENAI_API_VERSION=...       # Also supported for SDK compatibility
 export GOOGLE_API_KEY=...       # Gemini models
 export ANTHROPIC_API_KEY=...    # Claude models
 export TOGETHER_API_KEY=...     # Together AI models

@@ -35,18 +35,28 @@ class AzureOpenAIModel(BaseModel):
             azure_endpoint
             or (os.environ.get(endpoint_env) if endpoint_env else None)
             or os.environ.get("AZURE_OPENAI_ENDPOINT")
-            or os.environ.get("ENDPOINT_URL")
         )
         if not resolved_endpoint:
             raise ValueError(
-                "Azure endpoint not configured. Set AZURE_OPENAI_ENDPOINT or ENDPOINT_URL, "
+                "Azure endpoint not configured. Set AZURE_OPENAI_ENDPOINT, "
                 "or pass azure_endpoint."
             )
 
         resolved_key = api_key or (
             os.environ.get(api_key_env) if api_key_env else None
         ) or os.environ.get("AZURE_OPENAI_API_KEY")
-        resolved_api_version = api_version or os.environ.get("AZURE_OPENAI_API_VERSION") or "2024-08-01-preview"
+        resolved_api_version = (
+            api_version
+            or os.environ.get("AZURE_OPENAI_API_VERSION")
+            or os.environ.get("OPENAI_API_VERSION")
+        )
+        if not resolved_api_version:
+            # raise warning for backward compatibility, since API version is required for Azure but not for OpenAI
+            print(
+                "Azure API version not configured. Set AZURE_OPENAI_API_VERSION "
+                "with default value `2024-08-01-preview`."
+            )
+            resolved_api_version = "2024-08-01-preview"
 
         client_kwargs = {
             "azure_endpoint": resolved_endpoint,
@@ -86,7 +96,7 @@ class AzureOpenAIModel(BaseModel):
             **kwargs,
         )
         return response.choices[0].message.content or ""
-    
+
 if __name__ == "__main__":
     model = AzureOpenAIModel(model_name="gpt-4o")
     messages = [{'role': 'user', 'content': 'What are the differences between Azure Machine Learning and Azure AI services?'}]
