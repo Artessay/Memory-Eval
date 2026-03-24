@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from memory_eval.models.base import BaseModel
 from memory_eval.models.registry import ModelRegistry
+from memory_eval.utils.env import load_project_env
 
 
 @ModelRegistry.register("openai")
@@ -21,6 +22,8 @@ class OpenAIModel(BaseModel):
         **kwargs,
     ):
         super().__init__(model_name)
+        load_project_env()
+
         try:
             from openai import OpenAI
         except ImportError as exc:

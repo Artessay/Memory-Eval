@@ -97,6 +97,29 @@ export TOGETHER_API_KEY=...     # Together AI models
 export XAI_API_KEY=...          # Grok models
 ```
 
+For local development, you can also create a `.env` file in the project root. Memory-Eval loads `.env`
+automatically, but does not override variables already provided by the shell, CI, or deployment platform.
+
+```bash
+cp .env.example .env
+```
+
+Example `.env`:
+
+```bash
+OPENAI_API_KEY=your-openai-api-key
+GOOGLE_API_KEY=your-google-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+TOGETHER_API_KEY=your-together-api-key
+XAI_API_KEY=your-xai-api-key
+```
+
+Recommended usage:
+
+- Local development: use `.env`
+- CI/CD and production: inject secrets as environment variables from your platform secret manager
+- When both exist, injected environment variables win over `.env`
+
 ## Adding a New Task
 
 1. Create a new directory: `memory_eval/tasks/my_task/`

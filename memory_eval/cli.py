@@ -9,6 +9,7 @@ from rich.table import Table
 
 from memory_eval.models import register_builtin_models
 from memory_eval.tasks import register_builtin_tasks
+from memory_eval.utils.env import load_project_env
 
 console = Console()
 
@@ -17,6 +18,7 @@ console = Console()
 @click.version_option(package_name="memory-eval")
 def main():
     """Memory-Eval: Evaluation benchmark for Lifelong Understanding tasks."""
+    load_project_env()
 
 
 @main.command("list")
