@@ -1,0 +1,21 @@
+# HealthBench task configuration
+task_name: healthbench
+description: >
+  Medical conversation benchmark evaluating AI responses against
+  physician-created rubrics for accuracy, completeness, and safety.
+dataset:
+  name: openai/healthbench
+  subsets:
+    hard: 1000 examples (most challenging)
+    consensus: 3671 examples (physician-validated criteria)
+  default_subset: hard
+  split: test
+generation:
+  max_tokens: 1024
+  temperature: 0.0
+grader:
+  # Model used to evaluate responses against rubrics
+  # Should be a capable LLM (e.g., GPT-4o)
+  model: gpt-4o
+metrics:
+  - rubric_score

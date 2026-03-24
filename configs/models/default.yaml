@@ -1,0 +1,32 @@
+# Default model configurations for Memory-Eval
+# Add your models here following the structure below.
+
+gpt-4o:
+  backend: openai
+  model: gpt-4o
+  api_key_env: OPENAI_API_KEY
+  input_cost_per_m: 2.50
+  output_cost_per_m: 10.00
+
+gpt-4o-mini:
+  backend: openai
+  model: gpt-4o-mini
+  api_key_env: OPENAI_API_KEY
+  input_cost_per_m: 0.15
+  output_cost_per_m: 0.60
+
+gemini-2.0-flash:
+  backend: openai
+  model: gemini-2.0-flash
+  base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+  api_key_env: GOOGLE_API_KEY
+  input_cost_per_m: 0.10
+  output_cost_per_m: 0.40
+
+claude-3-5-sonnet:
+  backend: openai
+  model: claude-3-5-sonnet-20241022
+  base_url: https://api.anthropic.com/v1/
+  api_key_env: ANTHROPIC_API_KEY
+  input_cost_per_m: 3.00
+  output_cost_per_m: 15.00
