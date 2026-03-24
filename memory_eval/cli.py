@@ -7,6 +7,9 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from memory_eval.models import register_builtin_models
+from memory_eval.tasks import register_builtin_tasks
+
 console = Console()
 
 
@@ -23,10 +26,9 @@ def list_cmd(show_tasks: bool, show_models: bool):
     """List available tasks and/or model backends."""
     from memory_eval.tasks.registry import TaskRegistry
     from memory_eval.models.registry import ModelRegistry
-    import memory_eval.tasks.mm_lifelong  # noqa: F401 - register tasks
-    import memory_eval.tasks.healthbench  # noqa: F401 - register tasks
-    import memory_eval.models.openai_model  # noqa: F401 - register backends
-    import memory_eval.models.hf_model  # noqa: F401 - register backends
+
+    register_builtin_tasks()
+    register_builtin_models()
 
     if show_tasks or not show_models:
         table = Table(title="Available Tasks", show_header=True)
@@ -72,10 +74,9 @@ def run_cmd(
     from memory_eval.tasks.registry import TaskRegistry
     from memory_eval.models.registry import ModelRegistry
     from memory_eval.evaluator import Evaluator
-    import memory_eval.tasks.mm_lifelong  # noqa: F401
-    import memory_eval.tasks.healthbench  # noqa: F401
-    import memory_eval.models.openai_model  # noqa: F401
-    import memory_eval.models.hf_model  # noqa: F401
+
+    register_builtin_tasks()
+    register_builtin_models()
 
     # Build model
     model_cls = ModelRegistry.get(model_backend)
@@ -126,8 +127,8 @@ def run_cmd(
 def validate_cmd(task_name: str):
     """Validate a task configuration by loading a few samples."""
     from memory_eval.tasks.registry import TaskRegistry
-    import memory_eval.tasks.mm_lifelong  # noqa: F401
-    import memory_eval.tasks.healthbench  # noqa: F401
+
+    register_builtin_tasks()
 
     task_cls = TaskRegistry.get(task_name)
     task = task_cls()

@@ -2,10 +2,12 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
+from memory_eval.tasks import register_builtin_tasks
 from memory_eval.tasks.base import BaseTask, TaskResult
 from memory_eval.tasks.registry import TaskRegistry
-import memory_eval.tasks.mm_lifelong  # noqa: F401 - register tasks
-import memory_eval.tasks.healthbench  # noqa: F401 - register tasks
+
+
+register_builtin_tasks()
 
 
 class TestTaskRegistry:

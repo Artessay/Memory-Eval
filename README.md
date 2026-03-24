@@ -101,7 +101,8 @@ export XAI_API_KEY=...          # Grok models
 
 1. Create a new directory: `memory_eval/tasks/my_task/`
 2. Implement a class that extends `BaseTask` and decorate with `@TaskRegistry.register("my_task")`
-3. Implement `load_dataset()`, `build_messages()`, and `evaluate()` methods
+3. Add the packaged task to `register_builtin_tasks()` in `memory_eval/tasks/__init__.py`
+4. Implement `load_dataset()`, `build_messages()`, and `evaluate()` methods
 
 ```python
 from memory_eval.tasks.base import BaseTask
@@ -129,7 +130,8 @@ class MyTask(BaseTask):
 ## Adding a New Model Backend
 
 1. Implement a class that extends `BaseModel` and decorate with `@ModelRegistry.register("my_backend")`
-2. Implement the `generate()` method
+2. Add the packaged backend to `register_builtin_models()` in `memory_eval/models/__init__.py`
+3. Implement the `generate()` method
 
 ```python
 from memory_eval.models.base import BaseModel

@@ -2,10 +2,12 @@
 
 import pytest
 from unittest.mock import MagicMock, patch
+from memory_eval.models import register_builtin_models
 from memory_eval.models.base import BaseModel
 from memory_eval.models.registry import ModelRegistry
-import memory_eval.models.openai_model  # noqa: F401 - register backends
-import memory_eval.models.hf_model  # noqa: F401 - register backends
+
+
+register_builtin_models()
 
 
 class TestModelRegistry:
