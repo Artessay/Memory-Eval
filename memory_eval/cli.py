@@ -60,6 +60,26 @@ def list_cmd(show_tasks: bool, show_models: bool):
 @click.option("--temperature", default=0.0, show_default=True, help="Sampling temperature.")
 @click.option("--limit", default=None, type=int, help="Limit number of samples (for testing).")
 @click.option("--subset", default="standard", show_default=True, help="Dataset subset.")
+@click.option(
+    "--grader-model",
+    default=None,
+    help="Model name for rubric grading (e.g. gpt-4o). Required for HealthBench scoring.",
+)
+@click.option(
+    "--grader-backend",
+    default=None,
+    help="Model backend for the grader (defaults to --model-backend).",
+)
+@click.option(
+    "--grader-base-url",
+    default=None,
+    help="API base URL for the grader model (defaults to --base-url).",
+)
+@click.option(
+    "--grader-api-key-env",
+    default=None,
+    help="Env var name for the grader API key (defaults to --api-key-env).",
+)
 def run_cmd(
     task_names,
     model_backend,
@@ -71,6 +91,10 @@ def run_cmd(
     temperature,
     limit,
     subset,
+    grader_model,
+    grader_backend,
+    grader_base_url,
+    grader_api_key_env,
 ):
     """Run evaluation on one or more tasks."""
     from memory_eval.tasks.registry import TaskRegistry
@@ -89,6 +113,18 @@ def run_cmd(
         model_kwargs["api_key_env"] = api_key_env
     model = model_cls(model_name=model_name, **model_kwargs)
 
+    # Build grader model (for rubric-based evaluation such as HealthBench)
+    grader = None
+    if grader_model:
+        grader_backend_name = grader_backend or model_backend
+        grader_cls = ModelRegistry.get(grader_backend_name)
+        grader_kwargs = {}
+        if grader_base_url or base_url:
+            grader_kwargs["base_url"] = grader_base_url or base_url
+        if grader_api_key_env or api_key_env:
+            grader_kwargs["api_key_env"] = grader_api_key_env or api_key_env
+        grader = grader_cls(model_name=grader_model, **grader_kwargs)
+
     # Build tasks
     tasks = []
     for name in task_names:
@@ -96,7 +132,13 @@ def run_cmd(
         task_config = {}
         if name == "healthbench":
             task_config["subset"] = subset
-        tasks.append(task_cls(config=task_config))
+        task = task_cls(config=task_config)
+
+        # Attach grader to tasks that support rubric-based grading
+        if grader is not None and hasattr(task, "set_grader_model"):
+            task.set_grader_model(grader)
+
+        tasks.append(task)
 
     evaluator = Evaluator(model=model, output_dir=output_dir)
 

@@ -111,6 +111,75 @@ memory-eval validate --task mm_lifelong
 memory-eval validate --task healthbench
 ```
 
+## HealthBench Rubric Grading
+
+The HealthBench task supports **LLM-as-judge rubric grading**, where a separate
+grader model evaluates the target model's responses against physician-created
+rubrics. This produces meaningful quality metrics instead of simple length
+statistics.
+
+### How it works
+
+1. The **target model** generates a response for each health-related conversation
+   in the dataset.
+2. For each response, the **grader model** is asked to evaluate whether the
+   response meets each rubric criterion. Each criterion carries a point value
+   (positive for desired behaviors, negative for harmful ones).
+3. The grader returns a JSON judgment (`{"criteria_met": true/false, "explanation": "..."}`)
+   for each criterion.
+4. A per-sample score is computed as the ratio of achieved points to total
+   possible (positive) points, clipped to [0, 1].
+5. Overall metrics are aggregated across all samples, including bootstrap
+   confidence intervals and per-tag breakdowns.
+
+### Running with a grader model
+
+Pass `--grader-model` to enable rubric grading:
+
+```bash
+# Use GPT-4o as the grader to evaluate GPT-4o-mini responses
+memory-eval run \
+    --task healthbench \
+    --model-backend openai \
+    --model-name gpt-4o-mini \
+    --grader-model gpt-4o \
+    --subset hard
+
+# Use a different backend/API for the grader
+memory-eval run \
+    --task healthbench \
+    --model-backend openai \
+    --model-name gpt-4o-mini \
+    --grader-model gemini-2.0-flash \
+    --grader-backend openai \
+    --grader-base-url https://generativelanguage.googleapis.com/v1beta/openai/ \
+    --grader-api-key-env GOOGLE_API_KEY \
+    --subset hard
+```
+
+### Grader CLI options
+
+| Option | Description |
+|--------|-------------|
+| `--grader-model` | Model name for the grader (e.g. `gpt-4o`). Required to enable rubric scoring. |
+| `--grader-backend` | Model backend for the grader. Defaults to `--model-backend`. |
+| `--grader-base-url` | API base URL for the grader. Defaults to `--base-url`. |
+| `--grader-api-key-env` | Env var for the grader API key. Defaults to `--api-key-env`. |
+
+### Metrics
+
+When a grader model is provided, the following metrics are reported:
+
+| Metric | Description |
+|--------|-------------|
+| `overall_score` | Mean rubric score across all samples (0–1) |
+| `overall_score:bootstrap_std` | Bootstrap standard error of the mean |
+| `overall_score:n_samples` | Number of graded samples |
+| `tag:<name>` | Per-tag mean score (example-level and rubric-level tags) |
+
+Without a grader, only proxy metrics (`avg_response_length`, `num_samples`) are
+returned.
+
 ## Retry Behavior
 
 The `openai` and `azure` backends automatically retry transient API failures with exponential backoff.
@@ -243,7 +312,7 @@ memory_eval/
 │   └── healthbench/    # HealthBench task
 ├── metrics/
 │   ├── accuracy.py     # Exact match and multiple-choice accuracy
-│   └── rubric.py       # Rubric-based scoring
+│   └── rubric.py       # Rubric-based scoring (JSON grading, points, bootstrap stats, tag aggregation)
 └── utils/
     └── io.py           # JSON/JSONL I/O utilities
 configs/

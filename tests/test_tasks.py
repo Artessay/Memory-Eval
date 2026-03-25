@@ -189,22 +189,104 @@ class TestHealthBenchTask:
 
     def test_evaluate_with_grader(self):
         mock_grader = MagicMock()
-        mock_grader.generate.return_value = "Yes, this criterion is met."
+        mock_grader.generate.return_value = '{"criteria_met": true, "explanation": "met"}'
         self.task.set_grader_model(mock_grader)
 
         samples = [
             {
                 "conversation": [{"role": "user", "content": "headache?"}],
                 "rubrics": [
-                    {"criterion": "Recommends rest", "weight": 1.0},
-                    {"criterion": "Suggests hydration", "weight": 1.0},
+                    {"criterion": "Recommends rest", "points": 1},
+                    {"criterion": "Suggests hydration", "points": 1},
                 ],
             }
         ]
         predictions = ["Rest and drink water."]
         metrics = self.task.evaluate(samples, predictions)
-        assert "rubric_score" in metrics
-        assert metrics["rubric_score"] == 1.0
+        assert "overall_score" in metrics
+        assert metrics["overall_score"] == 1.0
+        assert "overall_score:bootstrap_std" in metrics
+        assert "overall_score:n_samples" in metrics
+
+    def test_evaluate_with_grader_partial(self):
+        mock_grader = MagicMock()
+        responses = [
+            '{"criteria_met": true, "explanation": "yes"}',
+            '{"criteria_met": false, "explanation": "no"}',
+        ]
+        mock_grader.generate.side_effect = responses
+        self.task.set_grader_model(mock_grader)
+
+        samples = [
+            {
+                "conversation": [{"role": "user", "content": "headache?"}],
+                "rubrics": [
+                    {"criterion": "Recommends rest", "points": 2},
+                    {"criterion": "Suggests hydration", "points": 3},
+                ],
+            }
+        ]
+        predictions = ["Rest only."]
+        metrics = self.task.evaluate(samples, predictions)
+        assert "overall_score" in metrics
+        # achieved 2/5 = 0.4
+        assert abs(metrics["overall_score"] - 0.4) < 1e-9
+
+    def test_evaluate_with_grader_tags(self):
+        mock_grader = MagicMock()
+        mock_grader.generate.return_value = '{"criteria_met": true, "explanation": "ok"}'
+        self.task.set_grader_model(mock_grader)
+
+        samples = [
+            {
+                "conversation": [{"role": "user", "content": "headache?"}],
+                "rubrics": [
+                    {"criterion": "Good advice", "points": 1, "tags": ["accuracy"]},
+                ],
+                "example_tags": ["safety"],
+            }
+        ]
+        predictions = ["Take rest."]
+        metrics = self.task.evaluate(samples, predictions)
+        assert "tag:safety" in metrics
+        assert "tag:accuracy" in metrics
+
+    def test_evaluate_with_grader_negative_points(self):
+        mock_grader = MagicMock()
+        # Both criteria met: +2 positive, -1 negative = 1/2 = 0.5
+        mock_grader.generate.return_value = '{"criteria_met": true, "explanation": "met"}'
+        self.task.set_grader_model(mock_grader)
+
+        samples = [
+            {
+                "conversation": [{"role": "user", "content": "test"}],
+                "rubrics": [
+                    {"criterion": "Good", "points": 2},
+                    {"criterion": "Harmful", "points": -1},
+                ],
+            }
+        ]
+        predictions = ["response"]
+        metrics = self.task.evaluate(samples, predictions)
+        # achieved = 2 + (-1) = 1, total_possible = 2 → 0.5
+        assert abs(metrics["overall_score"] - 0.5) < 1e-9
+
+    def test_evaluate_with_grader_yes_no_fallback(self):
+        mock_grader = MagicMock()
+        mock_grader.generate.return_value = "Yes, the response is good."
+        self.task.set_grader_model(mock_grader)
+
+        samples = [
+            {
+                "conversation": [{"role": "user", "content": "test"}],
+                "rubrics": [
+                    {"criterion": "Good", "points": 1},
+                ],
+            }
+        ]
+        predictions = ["response"]
+        metrics = self.task.evaluate(samples, predictions)
+        assert metrics["overall_score"] == 1.0
 
     def test_subset_config(self):
         from memory_eval.tasks.healthbench.task import HealthBenchTask

@@ -1,15 +1,21 @@
 """HealthBench task: Medical conversation rubric-based evaluation."""
 
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from memory_eval.tasks.base import BaseTask
 from memory_eval.tasks.registry import TaskRegistry
 from memory_eval.metrics.rubric import (
+    aggregate_tag_scores,
     build_rubric_grader_prompt,
-    compute_rubric_score,
+    compute_bootstrap_stats,
+    compute_points_score,
+    parse_json_judgment,
     parse_rubric_judgment,
 )
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = (
@@ -24,6 +30,9 @@ SUBSET_FILE_PATTERNS = {
     "consensus": "consensus_*.jsonl",
     "standard": "*_oss_eval.jsonl",
 }
+
+# Maximum retries when the grader returns unparseable output
+_GRADER_MAX_RETRIES = 3
 
 
 @TaskRegistry.register("healthbench")
@@ -161,68 +170,155 @@ class HealthBenchTask(BaseTask):
         """Set the LLM grader to use for rubric evaluation."""
         self._grader_model = model
 
+    # ------------------------------------------------------------------
+    # Grading helpers
+    # ------------------------------------------------------------------
+
+    def _grade_rubric_item(
+        self,
+        conversation: List[Dict[str, str]],
+        prediction: str,
+        criterion: str,
+    ) -> Dict[str, Any]:
+        """Call the grader model to evaluate one criterion.
+
+        Returns a dict with ``criteria_met`` (bool) and ``explanation`` (str).
+        Retries up to ``_GRADER_MAX_RETRIES`` times on unparseable output.
+        """
+        prompt = build_rubric_grader_prompt(conversation, prediction, criterion)
+        grader_messages = [{"role": "user", "content": prompt}]
+
+        for attempt in range(_GRADER_MAX_RETRIES):
+            response = self._grader_model.generate(
+                grader_messages, max_tokens=256, temperature=0.0,
+            )
+            met, explanation = parse_json_judgment(response)
+            if met is not None:
+                return {"criteria_met": met, "explanation": explanation}
+            logger.debug(
+                "Grader returned unparseable output (attempt %d/%d): %s",
+                attempt + 1,
+                _GRADER_MAX_RETRIES,
+                response[:200],
+            )
+
+        # Exhausted retries – fall back to Yes/No keyword matching
+        met = parse_rubric_judgment(response)
+        return {
+            "criteria_met": met if met is not None else False,
+            "explanation": f"Fallback parse from: {response[:200]}",
+        }
+
     def _grade_single(
         self,
         sample: Dict[str, Any],
         prediction: str,
-    ) -> float:
-        """Grade a single prediction against the sample's rubric."""
+    ) -> Dict[str, Any]:
+        """Grade a single prediction against the sample's rubric.
+
+        Returns a dict with ``score``, ``example_tags``, and ``rubric_results``
+        suitable for downstream aggregation.
+        """
         rubrics = sample.get("rubrics") or sample.get("criteria") or []
         if not rubrics:
-            return 0.0
+            return {"score": None, "example_tags": [], "rubric_results": []}
 
-        judgments = []
-        weights = []
+        # Build the conversation used for the grader prompt
+        conversation = sample.get("conversation") or []
+        if not conversation:
+            # Reconstruct from prompt + prompt_response if available
+            prompt_msgs = sample.get("prompt") or []
+            resp_msgs = sample.get("prompt_response") or []
+            if isinstance(prompt_msgs, list):
+                conversation = prompt_msgs + resp_msgs
+            elif isinstance(prompt_msgs, str) and prompt_msgs:
+                conversation = [{"role": "user", "content": prompt_msgs}]
+
+        rubric_results: List[Dict[str, Any]] = []
         for rubric in rubrics:
             if isinstance(rubric, dict):
                 criterion = rubric.get("criterion") or rubric.get("text") or str(rubric)
-                weight = float(rubric.get("weight", 1.0))
+                points = rubric.get("points")
+                tags = rubric.get("tags", [])
             else:
                 criterion = str(rubric)
-                weight = 1.0
+                points = None
+                tags = []
 
             if self._grader_model is not None:
-                conversation = sample.get("conversation") or []
-                prompt = build_rubric_grader_prompt(conversation, prediction, criterion)
-                grader_messages = [{"role": "user", "content": prompt}]
-                response = self._grader_model.generate(grader_messages, max_tokens=128, temperature=0.0)
-                judgment = parse_rubric_judgment(response)
+                judgment = self._grade_rubric_item(conversation, prediction, criterion)
             else:
-                judgment = None
+                judgment = {"criteria_met": False, "explanation": "No grader model"}
 
-            judgments.append(judgment)
-            weights.append(weight)
+            rubric_results.append({
+                "criterion": criterion,
+                "points": float(points) if points is not None else 1.0,
+                "tags": tags,
+                "criteria_met": judgment["criteria_met"],
+                "explanation": judgment["explanation"],
+            })
 
-        return compute_rubric_score(judgments, weights)
+        score = compute_points_score(rubric_results)
+        return {
+            "score": score if score is not None else 0.0,
+            "example_tags": sample.get("example_tags", []),
+            "rubric_results": rubric_results,
+        }
+
+    # ------------------------------------------------------------------
+    # Main evaluation entry-point
+    # ------------------------------------------------------------------
 
     def evaluate(
         self,
         samples: List[Dict[str, Any]],
         predictions: List[str],
     ) -> Dict[str, float]:
-        """
-        Evaluate HealthBench predictions.
+        """Evaluate HealthBench predictions.
 
-        If a grader model has been set, uses rubric-based scoring.
-        Otherwise returns placeholder metrics.
+        When a grader model has been set via :meth:`set_grader_model`, each
+        prediction is graded against physician-created rubrics.  The returned
+        metrics include:
+
+        * ``overall_score`` – mean rubric score across all samples (0–1)
+        * ``overall_score:bootstrap_std`` – bootstrap standard error
+        * ``overall_score:n_samples`` – number of graded samples
+        * Per-tag mean scores (example-level and rubric-level tags)
+
+        Without a grader model, only proxy metrics (average response length
+        and sample count) are returned.
         """
         if self._grader_model is not None:
-            scores = [
-                self._grade_single(sample, pred)
-                for sample, pred in zip(samples, predictions)
-            ]
-            avg_score = sum(scores) / len(scores) if scores else 0.0
-            num_graded = sum(
-                1 for sample in samples
-                if sample.get("rubrics") or sample.get("criteria")
-            )
-            return {
-                "rubric_score": avg_score,
-                "num_graded": num_graded,
+            sample_results: List[Dict[str, Any]] = []
+            scores: List[float] = []
+
+            for sample, pred in zip(samples, predictions):
+                result = self._grade_single(sample, pred)
+                sample_results.append(result)
+                if result["score"] is not None:
+                    scores.append(result["score"])
+
+            # Overall score with bootstrap statistics
+            stats = compute_bootstrap_stats(scores)
+            metrics: Dict[str, float] = {
+                "overall_score": stats["mean"],
+                "overall_score:bootstrap_std": stats["bootstrap_std"],
+                "overall_score:n_samples": stats["n_samples"],
             }
 
+            # Per-tag scores
+            tag_scores = aggregate_tag_scores(sample_results)
+            for tag, tag_score in sorted(tag_scores.items()):
+                metrics[f"tag:{tag}"] = tag_score
+
+            return metrics
+
         # Without grader model: return length statistics as proxy
-        avg_length = sum(len(p.split()) for p in predictions) / len(predictions) if predictions else 0.0
+        avg_length = (
+            sum(len(p.split()) for p in predictions) / len(predictions)
+            if predictions
+            else 0.0
+        )
         return {
             "avg_response_length": avg_length,
             "num_samples": float(len(predictions)),
