@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from memory_eval.models.base import BaseModel
 from memory_eval.tasks.base import BaseTask, TaskResult
-from memory_eval.utils.io import ensure_dir, load_json, save_json
+from memory_eval.utils.io import append_jsonl, ensure_dir, load_json, load_jsonl, save_json, save_jsonl
 
 
 def _sanitize_path_component(value: Any) -> str:
@@ -93,6 +93,10 @@ def build_evaluated_result_path(
     return os.path.join(output_dir, *relative_parts, graded_filename)
 
 
+def build_records_path(result_path: str) -> str:
+    return str(Path(result_path).with_suffix(".jsonl"))
+
+
 class Evaluator:
     """Orchestrates evaluation of one or more tasks with a given model."""
 
@@ -117,25 +121,46 @@ class Evaluator:
         if self.model is None:
             raise ValueError("A generation model is required to run tasks.")
 
+        task_config = dict(task.config)
+        generation_config = {
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "limit": limit,
+        }
+        model_info = {
+            "backend": self.model_backend,
+            "model_name": self.model.model_name,
+        }
+        result_path = build_result_path(
+            output_dir=self.output_dir,
+            task_name=task.task_name,
+            model_backend=model_info.get("backend"),
+            model_name=model_info.get("model_name"),
+            task_config=task_config,
+            generation_config=generation_config,
+        )
+        records_path = build_records_path(result_path)
+        existing_records = self._load_sample_records_from_paths(
+            result_path=result_path,
+            records_path=records_path,
+        )
+
         result = task.run(
             model=self.model,
             max_tokens=max_tokens,
             temperature=temperature,
             limit=limit,
             compute_metrics=False,
+            existing_records=existing_records,
+            record_callback=lambda record: append_jsonl(record, records_path),
         )
         result.metadata.update(
             {
-                "task_config": dict(task.config),
-                "generation_config": {
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                    "limit": limit,
-                },
-                "model": {
-                    "backend": self.model_backend,
-                    "model_name": self.model.model_name,
-                },
+                "task_config": task_config,
+                "generation_config": generation_config,
+                "model": model_info,
+                "sample_results_path": records_path,
+                "resumed_samples": len(existing_records),
             }
         )
         result.metadata["result_path"] = self._save_result(result)
@@ -166,6 +191,61 @@ class Evaluator:
             generation_config=result.metadata.get("generation_config", {}),
         )
 
+    def _legacy_records_from_summary(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        predictions = data.get("predictions") or []
+        references = data.get("references") or []
+        samples = data.get("evaluation_samples") or []
+        if not predictions:
+            return []
+
+        records = []
+        for index, prediction in enumerate(predictions):
+            record = {
+                "prediction": prediction,
+                "reference": references[index] if index < len(references) else "",
+                "evaluation_sample": samples[index] if index < len(samples) else {},
+            }
+            records.append(record)
+        return records
+
+    def _load_sample_records_from_paths(self, result_path: str, records_path: Optional[str] = None) -> List[Dict[str, Any]]:
+        records_path = records_path or build_records_path(result_path)
+        if os.path.exists(records_path):
+            return load_jsonl(records_path)
+
+        if not os.path.exists(result_path):
+            return []
+
+        data = load_json(result_path)
+        records = self._legacy_records_from_summary(data)
+        if records:
+            save_jsonl(records, records_path)
+        return records
+
+    def _build_summary_payload(
+        self,
+        *,
+        task_name: str,
+        task_config: Dict[str, Any],
+        model: Dict[str, Any],
+        generation_config: Dict[str, Any],
+        metrics: Dict[str, Any],
+        num_samples: int,
+        evaluations: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        return {
+            "schema_version": 2,
+            "task_name": task_name,
+            "task_config": task_config,
+            "model": model,
+            "generation_config": generation_config,
+            "metrics": metrics,
+            "num_samples": num_samples,
+            "evaluations": evaluations or {},
+            "metadata": metadata or {},
+        }
+
     def _save_result(self, result: TaskResult) -> str:
         """Save a TaskResult to JSON and return the output path."""
         path = self._build_result_path(result)
@@ -175,21 +255,18 @@ class Evaluator:
             for key, value in result.metadata.items()
             if key not in {"task_config", "generation_config", "model", "result_path"}
         }
+        extra_metadata.setdefault("sample_results_path", build_records_path(path))
         save_json(
-            {
-                "schema_version": 2,
-                "task_name": result.task_name,
-                "task_config": result.metadata.get("task_config", {}),
-                "model": result.metadata.get("model", {}),
-                "generation_config": result.metadata.get("generation_config", {}),
-                "metrics": result.metrics,
-                "num_samples": result.num_samples,
-                "predictions": result.predictions,
-                "references": result.references,
-                "evaluation_samples": result.evaluation_samples,
-                "evaluations": {},
-                "metadata": extra_metadata,
-            },
+            self._build_summary_payload(
+                task_name=result.task_name,
+                task_config=result.metadata.get("task_config", {}),
+                model=result.metadata.get("model", {}),
+                generation_config=result.metadata.get("generation_config", {}),
+                metrics=result.metrics,
+                num_samples=result.num_samples,
+                evaluations={},
+                metadata=extra_metadata,
+            ),
             path,
         )
         return path
@@ -204,29 +281,58 @@ class Evaluator:
     ) -> Dict[str, Any]:
         """Evaluate a saved result file and persist the metrics."""
         data = load_json(result_path)
-        predictions = data.get("predictions") or []
-        samples = data.get("evaluation_samples") or []
+        source_records = self._load_sample_records_from_paths(result_path)
+        if not source_records:
+            raise ValueError(f"No per-sample records found for result file: {result_path}")
 
-        if not samples:
-            samples = task.load_dataset()
-            if len(samples) < len(predictions):
-                raise ValueError(
-                    f"Result file has {len(predictions)} predictions but only {len(samples)} samples were loaded."
-                )
-            samples = samples[: len(predictions)]
+        destination = output_path or result_path
+        destination_records_path = build_records_path(destination)
+        if destination == result_path:
+            evaluated_records = [
+                record for record in source_records if record.get("evaluation") is not None
+            ]
+            if not evaluated_records and os.path.exists(destination_records_path):
+                save_jsonl([], destination_records_path)
+        else:
+            evaluated_records = self._load_sample_records_from_paths(
+                result_path=destination,
+                records_path=destination_records_path,
+            ) if os.path.exists(destination_records_path) or os.path.exists(destination) else []
 
-        metrics = task.evaluate(samples, predictions)
+        if len(evaluated_records) > len(source_records):
+            evaluated_records = evaluated_records[: len(source_records)]
+            save_jsonl(evaluated_records, destination_records_path)
+
+        for source_record in source_records[len(evaluated_records):]:
+            evaluated_record = dict(source_record)
+            evaluated_record["evaluation"] = task.evaluate_record(source_record)
+            append_jsonl(evaluated_record, destination_records_path)
+            evaluated_records.append(evaluated_record)
+
+        metrics = task.aggregate_metrics_from_records(evaluated_records)
         evaluations = data.get("evaluations") or {}
         evaluations[evaluation_name] = {
             "metrics": metrics,
             "grader": grader_info or {},
         }
-        data["metrics"] = metrics
-        data["evaluations"] = evaluations
 
-        destination = output_path or result_path
-        save_json(data, destination)
-        return data
+        metadata = dict(data.get("metadata") or {})
+        metadata["source_result_path"] = result_path
+        metadata["source_sample_results_path"] = build_records_path(result_path)
+        metadata["sample_results_path"] = destination_records_path
+
+        updated = self._build_summary_payload(
+            task_name=data.get("task_name") or task.task_name,
+            task_config=data.get("task_config") or {},
+            model=data.get("model") or {},
+            generation_config=data.get("generation_config") or {},
+            metrics=metrics,
+            num_samples=len(source_records),
+            evaluations=evaluations,
+            metadata=metadata,
+        )
+        save_json(updated, destination)
+        return updated
 
     def summary(self, results: Dict[str, TaskResult]) -> Dict[str, Any]:
         """Return a summary dict of all task metrics."""

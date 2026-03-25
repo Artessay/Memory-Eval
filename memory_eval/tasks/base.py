@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from memory_eval.models.base import BaseModel
 
@@ -65,6 +65,24 @@ class BaseTask(ABC):
         """Return a JSON-serializable sample payload needed for deferred evaluation."""
         return dict(sample)
 
+    def build_result_record(self, sample: Dict[str, Any], prediction: str) -> Dict[str, Any]:
+        """Build a JSON-serializable per-sample record for incremental persistence."""
+        return {
+            "prediction": prediction,
+            "reference": self.get_reference(sample),
+            "evaluation_sample": self.serialize_sample_for_evaluation(sample),
+        }
+
+    def evaluate_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute per-sample evaluation details for a persisted record."""
+        return {}
+
+    def aggregate_metrics_from_records(self, records: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Aggregate metrics from persisted per-sample records."""
+        samples = [record.get("evaluation_sample", {}) for record in records]
+        predictions = [str(record.get("prediction", "")) for record in records]
+        return self.evaluate(samples, predictions)
+
     def run(
         self,
         model: BaseModel,
@@ -72,6 +90,8 @@ class BaseTask(ABC):
         temperature: float = 0.0,
         limit: Optional[int] = None,
         compute_metrics: bool = True,
+        existing_records: Optional[List[Dict[str, Any]]] = None,
+        record_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> TaskResult:
         """
         Run the full evaluation pipeline on the given model.
@@ -82,6 +102,8 @@ class BaseTask(ABC):
             temperature: Sampling temperature.
             limit: If set, only evaluate on this many samples.
             compute_metrics: If True, compute task metrics immediately.
+            existing_records: Existing persisted sample records to resume from.
+            record_callback: Called after each newly generated sample record.
 
         Returns:
             A TaskResult with metrics and predictions.
@@ -92,15 +114,30 @@ class BaseTask(ABC):
         if limit is not None:
             samples = samples[:limit]
 
-        predictions = []
-        for sample in tqdm(samples, desc=f"Running {self.task_name}"):
+        existing_records = list(existing_records or [])
+        completed = min(len(existing_records), len(samples))
+        if len(existing_records) > len(samples):
+            existing_records = existing_records[: len(samples)]
+
+        predictions = [str(record.get("prediction", "")) for record in existing_records]
+        references = [str(record.get("reference", "")) for record in existing_records]
+        evaluation_samples = [
+            record.get("evaluation_sample", {}) for record in existing_records
+        ]
+        new_records: List[Dict[str, Any]] = []
+
+        for sample in tqdm(samples[completed:], initial=completed, total=len(samples), desc=f"Running {self.task_name}"):
             messages = self.build_messages(sample)
             pred = model.generate(messages, max_tokens=max_tokens, temperature=temperature)
-            predictions.append(pred)
+            record = self.build_result_record(sample, pred)
+            new_records.append(record)
+            predictions.append(record["prediction"])
+            references.append(str(record.get("reference", "")))
+            evaluation_samples.append(record.get("evaluation_sample", {}))
+            if record_callback is not None:
+                record_callback(record)
 
-        metrics = self.evaluate(samples, predictions) if compute_metrics else {}
-        references = [self.get_reference(s) for s in samples]
-        evaluation_samples = [self.serialize_sample_for_evaluation(sample) for sample in samples]
+        metrics = self.aggregate_metrics_from_records(existing_records + new_records) if compute_metrics else {}
 
         return TaskResult(
             task_name=self.task_name,

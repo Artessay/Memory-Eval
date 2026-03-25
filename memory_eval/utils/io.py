@@ -34,6 +34,12 @@ def save_jsonl(records: List[Dict], path: str) -> None:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
+def append_jsonl(record: Dict, path: str) -> None:
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
 def ensure_dir(path: str) -> str:
     Path(path).mkdir(parents=True, exist_ok=True)
     return path

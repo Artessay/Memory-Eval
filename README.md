@@ -107,13 +107,14 @@ memory-eval run \
     --subset hard
 ```
 
-`run` now saves raw predictions plus the serialized sample payload needed for deferred evaluation. The output path is deterministic and based on the task, model backend, model name, and key generation parameters, for example:
+`run` now saves a lightweight summary JSON plus a sidecar JSONL containing one record per sample (prediction, reference, and serialized sample payload needed for deferred evaluation). The output path is deterministic and based on the task, model backend, model name, and key generation parameters, for example:
 
 ```text
 results/healthbench/openai/gpt-4o/subset-hard__max_tokens-512__temperature-0.0__limit-all.json
+results/healthbench/openai/gpt-4o/subset-hard__max_tokens-512__temperature-0.0__limit-all.jsonl
 ```
 
-Re-running the same experiment updates the same result file.
+Re-running the same experiment updates the same result files and resumes from the existing JSONL records when possible.
 
 ### Evaluate saved results
 
@@ -152,7 +153,7 @@ For tasks such as `healthbench`, deferred evaluation lets you use a dedicated gr
 
 Both `--model-config` and `--grader-config` reuse entries from [configs/models/default.yaml](configs/models/default.yaml), so provider-specific fields such as `base_url`, `api_key_env`, `endpoint_env`, and `api_version` only need to be defined once.
 
-When `--output-file` is omitted, `evaluate` now writes to a separate file under `results/evaluated/...` and appends a grader marker such as `__graded-by-azure-gpt-4o.json`, leaving the original generation result untouched.
+When `--output-file` is omitted, `evaluate` now writes to a separate file under `results/evaluated/...` and appends a grader marker such as `__graded-by-azure-gpt-4o.json`, leaving the original generation result untouched. Evaluated outputs also have a same-named JSONL sidecar so rubric grading can be checkpointed and resumed.
 
 ### Validate task configuration
 

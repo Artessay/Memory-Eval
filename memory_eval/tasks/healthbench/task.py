@@ -193,14 +193,18 @@ class HealthBenchTask(BaseTask):
         self,
         sample: Dict[str, Any],
         prediction: str,
-    ) -> float:
+    ) -> Dict[str, Any]:
         """Grade a single prediction against the sample's rubric."""
         rubrics = sample.get("rubrics") or sample.get("criteria") or []
         if not rubrics:
-            return 0.0
+            return {
+                "rubric_score": 0.0,
+                "criterion_results": [],
+            }
 
         judgments = []
         weights = []
+        criterion_results = []
         for rubric in rubrics:
             if isinstance(rubric, dict):
                 criterion = rubric.get("criterion") or rubric.get("text") or str(rubric)
@@ -225,8 +229,18 @@ class HealthBenchTask(BaseTask):
 
             judgments.append(judgment)
             weights.append(weight)
+            criterion_results.append(
+                {
+                    "criterion": criterion,
+                    "weight": weight,
+                    "criteria_met": judgment,
+                }
+            )
 
-        return compute_rubric_score(judgments, weights)
+        return {
+            "rubric_score": compute_rubric_score(judgments, weights),
+            "criterion_results": criterion_results,
+        }
 
     def evaluate(
         self,
@@ -241,7 +255,7 @@ class HealthBenchTask(BaseTask):
         """
         if self._grader_model is not None:
             scores = [
-                self._grade_single(sample, pred)
+                self._grade_single(sample, pred)["rubric_score"]
                 for sample, pred in zip(samples, predictions)
             ]
             avg_score = sum(scores) / len(scores) if scores else 0.0
@@ -259,6 +273,39 @@ class HealthBenchTask(BaseTask):
         avg_length = sum(len(p.split()) for p in predictions) / len(predictions) if predictions else 0.0
         return {
             "avg_response_length": avg_length,
+        }
+
+    def evaluate_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute per-sample rubric evaluation details."""
+        sample = record.get("evaluation_sample", {})
+        prediction = str(record.get("prediction", ""))
+        return self._grade_single(sample, prediction)
+
+    def aggregate_metrics_from_records(self, records: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Aggregate rubric metrics from persisted per-sample records."""
+        if self._grader_model is None:
+            samples = [record.get("evaluation_sample", {}) for record in records]
+            predictions = [str(record.get("prediction", "")) for record in records]
+            return self.evaluate(samples, predictions)
+
+        if not records:
+            return {
+                "rubric_score": 0.0,
+                "num_graded": 0,
+            }
+
+        scores = [
+            float((record.get("evaluation") or {}).get("rubric_score", 0.0))
+            for record in records
+        ]
+        num_graded = sum(
+            1
+            for record in records
+            if (record.get("evaluation_sample", {}).get("rubrics") or record.get("evaluation_sample", {}).get("criteria"))
+        )
+        return {
+            "rubric_score": sum(scores) / len(scores) if scores else 0.0,
+            "num_graded": num_graded,
         }
 
     def get_reference(self, sample: Dict[str, Any]) -> str:

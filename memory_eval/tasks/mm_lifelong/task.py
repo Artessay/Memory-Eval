@@ -196,3 +196,44 @@ class MMLifelongTask(BaseTask):
             metrics[f"accuracy_{cat}"] = cat_acc
 
         return metrics
+
+    def evaluate_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute per-sample correctness for checkpointable evaluation."""
+        sample = record.get("evaluation_sample", {})
+        prediction = str(record.get("prediction", ""))
+        reference = str(record.get("reference") or self.get_reference(sample))
+        if self._has_options(sample):
+            correct = compute_multiple_choice_accuracy([prediction], [reference])
+        else:
+            correct = compute_exact_match(prediction, reference)
+
+        category = sample.get("category") or sample.get("type") or sample.get("task_type")
+        return {
+            "correct": float(correct),
+            "category": category,
+        }
+
+    def aggregate_metrics_from_records(self, records: List[Dict[str, Any]]) -> Dict[str, float]:
+        """Aggregate metrics from persisted per-sample records."""
+        if not records:
+            return {"accuracy": 0.0}
+
+        metrics: Dict[str, float] = {
+            "accuracy": sum(
+                float((record.get("evaluation") or {}).get("correct", 0.0))
+                for record in records
+            ) / len(records)
+        }
+
+        categories: Dict[str, List[float]] = {}
+        for record in records:
+            evaluation = record.get("evaluation") or {}
+            category = evaluation.get("category")
+            if not category:
+                continue
+            categories.setdefault(str(category), []).append(float(evaluation.get("correct", 0.0)))
+
+        for category, values in categories.items():
+            metrics[f"accuracy_{category}"] = sum(values) / len(values)
+
+        return metrics
