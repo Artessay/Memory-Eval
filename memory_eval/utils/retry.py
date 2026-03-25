@@ -14,7 +14,7 @@ class RetryHandler:
 
     def __init__(
         self,
-        max_retries: int = 4,
+        max_retries: int = 8,
         base_delay: float = 1.0,
         max_delay: float = 30.0,
         jitter: float = 0.25,
@@ -39,7 +39,7 @@ class RetryHandler:
             max_retries=int(
                 max_retries
                 if max_retries is not None
-                else os.environ.get("MEMORY_EVAL_MAX_RETRIES", 4)
+                else os.environ.get("MEMORY_EVAL_MAX_RETRIES", 8)
             ),
             base_delay=float(
                 base_delay

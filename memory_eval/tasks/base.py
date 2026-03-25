@@ -15,6 +15,7 @@ class TaskResult:
     num_samples: int
     predictions: List[str] = field(default_factory=list)
     references: List[str] = field(default_factory=list)
+    evaluation_samples: List[Dict[str, Any]] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -60,12 +61,17 @@ class BaseTask(ABC):
             A dict mapping metric names to values.
         """
 
+    def serialize_sample_for_evaluation(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a JSON-serializable sample payload needed for deferred evaluation."""
+        return dict(sample)
+
     def run(
         self,
         model: BaseModel,
-        max_tokens: int = 512,
+        max_tokens: int = 4096,
         temperature: float = 0.0,
         limit: Optional[int] = None,
+        compute_metrics: bool = True,
     ) -> TaskResult:
         """
         Run the full evaluation pipeline on the given model.
@@ -75,6 +81,7 @@ class BaseTask(ABC):
             max_tokens: Max tokens to generate per sample.
             temperature: Sampling temperature.
             limit: If set, only evaluate on this many samples.
+            compute_metrics: If True, compute task metrics immediately.
 
         Returns:
             A TaskResult with metrics and predictions.
@@ -91,8 +98,9 @@ class BaseTask(ABC):
             pred = model.generate(messages, max_tokens=max_tokens, temperature=temperature)
             predictions.append(pred)
 
-        metrics = self.evaluate(samples, predictions)
+        metrics = self.evaluate(samples, predictions) if compute_metrics else {}
         references = [self.get_reference(s) for s in samples]
+        evaluation_samples = [self.serialize_sample_for_evaluation(sample) for sample in samples]
 
         return TaskResult(
             task_name=self.task_name,
@@ -100,6 +108,8 @@ class BaseTask(ABC):
             num_samples=len(samples),
             predictions=predictions,
             references=references,
+            evaluation_samples=evaluation_samples,
+            metadata={"task_config": dict(self.config)},
         )
 
     def get_reference(self, sample: Dict[str, Any]) -> str:

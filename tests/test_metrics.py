@@ -85,6 +85,13 @@ class TestComputeMultipleChoiceAccuracy:
 
 
 class TestParseRubricJudgment:
+    def test_json_true(self):
+        assert parse_rubric_judgment('{"explanation": "ok", "criteria_met": true}') is True
+
+    def test_json_false_in_code_block(self):
+        response = '```json\n{"explanation": "missing", "criteria_met": false}\n```'
+        assert parse_rubric_judgment(response) is False
+
     def test_yes(self):
         assert parse_rubric_judgment("Yes, the response covers this.") is True
 
@@ -134,4 +141,4 @@ class TestBuildRubricGraderPrompt:
         assert "headache" in prompt
         assert "ibuprofen" in prompt
         assert "Recommends OTC medication" in prompt
-        assert "Yes" in prompt or "No" in prompt
+        assert '"criteria_met"' in prompt

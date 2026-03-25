@@ -22,7 +22,7 @@ class BaseModel(ABC):
     def generate(
         self,
         messages: List[Dict[str, Any]],
-        max_tokens: int = 512,
+        max_tokens: int = 4096,
         temperature: float = 0.0,
         **kwargs,
     ) -> str:
@@ -43,7 +43,7 @@ class BaseModel(ABC):
     def batch_generate(
         self,
         all_messages: List[List[Dict[str, Any]]],
-        max_tokens: int = 512,
+        max_tokens: int = 4096,
         temperature: float = 0.0,
         **kwargs,
     ) -> List[str]:

@@ -156,6 +156,18 @@ class MMLifelongTask(BaseTask):
         answer = sample.get("answer") or sample.get("Answer") or sample.get("gt_answer", "")
         return str(answer).strip().upper()
 
+    def serialize_sample_for_evaluation(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist only the fields required to score deferred predictions."""
+        serialized = {
+            "answer": sample.get("answer") or sample.get("Answer") or sample.get("gt_answer", ""),
+            "category": sample.get("category"),
+            "type": sample.get("type"),
+            "task_type": sample.get("task_type"),
+        }
+        if self._has_options(sample):
+            serialized["options"] = sample.get("options") or sample.get("choices") or []
+        return serialized
+
     def evaluate(
         self,
         samples: List[Dict[str, Any]],

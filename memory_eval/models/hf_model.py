@@ -46,7 +46,7 @@ class HuggingFaceModel(BaseModel):
     def generate(
         self,
         messages: List[Dict[str, Any]],
-        max_tokens: int = 512,
+        max_tokens: int = 4096,
         temperature: float = 0.0,
         **kwargs,
     ) -> str:

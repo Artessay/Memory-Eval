@@ -58,13 +58,16 @@ memory-eval list
 memory-eval list --models
 ```
 
-### Run evaluation
+### Run generation
 
 ```bash
-# Evaluate GPT-4o on MM-Lifelong
+# Generate predictions for MM-Lifelong
 memory-eval run --task mm_lifelong --model-backend openai --model-name gpt-4o
 
-# Evaluate on HealthBench (hard subset)
+# Generate predictions using a named model config
+memory-eval run --task healthbench --model-config gpt-4o --subset hard
+
+# Generate predictions for HealthBench (hard subset)
 memory-eval run --task healthbench --model-backend openai --model-name gpt-4o --subset hard
 
 # Evaluate on HealthBench standard subset
@@ -104,6 +107,53 @@ memory-eval run \
     --subset hard
 ```
 
+`run` now saves raw predictions plus the serialized sample payload needed for deferred evaluation. The output path is deterministic and based on the task, model backend, model name, and key generation parameters, for example:
+
+```text
+results/healthbench/openai/gpt-4o/subset-hard__max_tokens-512__temperature-0.0__limit-all.json
+```
+
+Re-running the same experiment updates the same result file.
+
+### Evaluate saved results
+
+```bash
+# Evaluate a saved MM-Lifelong result with task-native metrics
+memory-eval evaluate \
+    --result-file results/mm_lifelong/openai/gpt-4o/max_tokens-4096__temperature-0.0__limit-all.json
+
+# Or let evaluate locate the generation result from the same experiment parameters
+memory-eval evaluate \
+    --task healthbench \
+    --model-config azure-gpt-4o \
+    --subset standard \
+    --limit 10 \
+    --grader-config azure-gpt-4o
+
+# Evaluate a saved HealthBench result with a separate grader model
+memory-eval evaluate \
+    --result-file results/healthbench/openai/gpt-4o/subset-hard__max_tokens-512__temperature-0.0__limit-all.json \
+    --grader-config gpt-4o
+
+# Equivalent explicit grader configuration
+memory-eval evaluate \
+    --result-file results/healthbench/openai/gpt-4o/subset-hard__max_tokens-512__temperature-0.0__limit-all.json \
+    --grader-backend openai \
+    --grader-model gpt-4o
+
+# Evaluate a saved HealthBench result with Azure OpenAI as the grader
+memory-eval evaluate \
+    --result-file results/healthbench/openai/gpt-4o/subset-hard__max_tokens-512__temperature-0.0__limit-all.json \
+    --grader-backend azure \
+    --grader-model gpt-4o
+```
+
+For tasks such as `healthbench`, deferred evaluation lets you use a dedicated grader model after generation finishes, instead of coupling grading to the original `run` command.
+
+Both `--model-config` and `--grader-config` reuse entries from [configs/models/default.yaml](configs/models/default.yaml), so provider-specific fields such as `base_url`, `api_key_env`, `endpoint_env`, and `api_version` only need to be defined once.
+
+When `--output-file` is omitted, `evaluate` now writes to a separate file under `results/evaluated/...` and appends a grader marker such as `__graded-by-azure-gpt-4o.json`, leaving the original generation result untouched.
+
 ### Validate task configuration
 
 ```bash
@@ -114,7 +164,7 @@ memory-eval validate --task healthbench
 ## Retry Behavior
 
 The `openai` and `azure` backends automatically retry transient API failures with exponential backoff.
-By default they retry up to 4 times for:
+By default they retry up to 8 times for:
 
 - HTTP `429` rate-limit responses
 - HTTP `5xx` server-side failures
@@ -125,7 +175,7 @@ Non-retryable client errors such as HTTP `400` are raised immediately.
 You can tune the retry behavior with environment variables:
 
 ```bash
-export MEMORY_EVAL_MAX_RETRIES=4
+export MEMORY_EVAL_MAX_RETRIES=8
 export MEMORY_EVAL_RETRY_BASE_DELAY=1.0
 export MEMORY_EVAL_RETRY_MAX_DELAY=30.0
 export MEMORY_EVAL_RETRY_JITTER=0.25
@@ -217,7 +267,7 @@ from memory_eval.models.registry import ModelRegistry
 
 @ModelRegistry.register("my_backend")
 class MyBackend(BaseModel):
-    def generate(self, messages, max_tokens=512, temperature=0.0, **kwargs):
+    def generate(self, messages, max_tokens=4096, temperature=0.0, **kwargs):
         # Your implementation here
         return "response"
 ```

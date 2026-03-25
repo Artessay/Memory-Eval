@@ -63,6 +63,22 @@ class TestMMLifelongTask:
         sample = {"answer": "b"}
         assert self.task.get_reference(sample) == "B"
 
+    def test_serialize_sample_for_evaluation(self):
+        sample = {
+            "answer": "A",
+            "category": "temporal",
+            "options": ["one", "two"],
+            "image": b"ignored",
+        }
+        serialized = self.task.serialize_sample_for_evaluation(sample)
+        assert serialized == {
+            "answer": "A",
+            "category": "temporal",
+            "type": None,
+            "task_type": None,
+            "options": ["one", "two"],
+        }
+
     def test_load_dataset_uses_raw_json_split_files(self, tmp_path):
         day_test = tmp_path / "day_test.json"
         week_test = tmp_path / "week_test.json"
@@ -187,9 +203,23 @@ class TestHealthBenchTask:
         metrics = self.task.evaluate(samples, predictions)
         assert "avg_response_length" in metrics
 
+    def test_serialize_sample_for_evaluation(self):
+        sample = {
+            "conversation": [{"role": "user", "content": "headache?"}],
+            "rubrics": [{"criterion": "Recommends rest", "weight": 1.0}],
+            "extra": "ignored",
+        }
+        assert self.task.serialize_sample_for_evaluation(sample) == {
+            "conversation": [{"role": "user", "content": "headache?"}],
+            "prompt": None,
+            "question": None,
+            "rubrics": [{"criterion": "Recommends rest", "weight": 1.0}],
+            "criteria": [],
+        }
+
     def test_evaluate_with_grader(self):
         mock_grader = MagicMock()
-        mock_grader.generate.return_value = "Yes, this criterion is met."
+        mock_grader.generate.return_value = '{"explanation": "criterion satisfied", "criteria_met": true}'
         self.task.set_grader_model(mock_grader)
 
         samples = [
@@ -244,6 +274,7 @@ class TestBaseTaskResult:
             num_samples=100,
             predictions=["A", "B"],
             references=["A", "C"],
+            evaluation_samples=[{"answer": "A"}],
         )
         assert result.task_name == "test"
         assert result.metrics["accuracy"] == 0.8

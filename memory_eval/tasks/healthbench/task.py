@@ -161,6 +161,34 @@ class HealthBenchTask(BaseTask):
         """Set the LLM grader to use for rubric evaluation."""
         self._grader_model = model
 
+    def serialize_sample_for_evaluation(self, sample: Dict[str, Any]) -> Dict[str, Any]:
+        """Persist only the fields required for deferred rubric grading."""
+        return {
+            "conversation": sample.get("conversation") or [],
+            "prompt": sample.get("prompt"),
+            "question": sample.get("question"),
+            "rubrics": sample.get("rubrics") or [],
+            "criteria": sample.get("criteria") or [],
+        }
+
+    def _get_grading_conversation(self, sample: Dict[str, Any]) -> List[Dict[str, str]]:
+        conversation = sample.get("conversation") or []
+        if conversation:
+            return conversation
+
+        prompt = sample.get("prompt") or sample.get("question") or ""
+        if isinstance(prompt, list):
+            messages: List[Dict[str, str]] = []
+            self._append_chat_messages(messages, prompt)
+            return messages
+        if isinstance(prompt, dict):
+            messages = []
+            self._append_chat_messages(messages, prompt)
+            return messages
+        if isinstance(prompt, str) and prompt:
+            return [{"role": "user", "content": prompt}]
+        return []
+
     def _grade_single(
         self,
         sample: Dict[str, Any],
@@ -182,10 +210,15 @@ class HealthBenchTask(BaseTask):
                 weight = 1.0
 
             if self._grader_model is not None:
-                conversation = sample.get("conversation") or []
+                conversation = self._get_grading_conversation(sample)
                 prompt = build_rubric_grader_prompt(conversation, prediction, criterion)
                 grader_messages = [{"role": "user", "content": prompt}]
-                response = self._grader_model.generate(grader_messages, max_tokens=128, temperature=0.0)
+                response = self._grader_model.generate(
+                    grader_messages,
+                    max_tokens=256,
+                    temperature=0.0,
+                    response_format={"type": "json_object"},
+                )
                 judgment = parse_rubric_judgment(response)
             else:
                 judgment = None
@@ -222,10 +255,10 @@ class HealthBenchTask(BaseTask):
             }
 
         # Without grader model: return length statistics as proxy
+        print("No grader model set, returning average response length as placeholder metric.")
         avg_length = sum(len(p.split()) for p in predictions) / len(predictions) if predictions else 0.0
         return {
             "avg_response_length": avg_length,
-            "num_samples": float(len(predictions)),
         }
 
     def get_reference(self, sample: Dict[str, Any]) -> str:
