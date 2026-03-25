@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tqdm import tqdm
+
 from memory_eval.models.base import BaseModel
 from memory_eval.tasks.base import BaseTask, TaskResult
 from memory_eval.utils.io import append_jsonl, ensure_dir, load_json, load_jsonl, save_json, save_jsonl
@@ -95,6 +97,10 @@ def build_evaluated_result_path(
 
 def build_records_path(result_path: str) -> str:
     return str(Path(result_path).with_suffix(".jsonl"))
+
+
+def _normalize_path(path: str) -> str:
+    return os.path.normcase(os.path.abspath(path))
 
 
 class Evaluator:
@@ -246,6 +252,51 @@ class Evaluator:
             "metadata": metadata or {},
         }
 
+    def _merge_evaluated_records(
+        self,
+        source_records: List[Dict[str, Any]],
+        persisted_records: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        merged_records: List[Dict[str, Any]] = []
+        for index, source_record in enumerate(source_records[: len(persisted_records)]):
+            persisted_record = persisted_records[index] or {}
+            evaluation = persisted_record.get("evaluation")
+            if evaluation is None:
+                break
+
+            merged_record = dict(source_record)
+            merged_record["evaluation"] = evaluation
+            for key, value in persisted_record.items():
+                if key not in {"prediction", "reference", "evaluation_sample", "evaluation"}:
+                    merged_record[key] = value
+            merged_records.append(merged_record)
+        return merged_records
+
+    def _save_evaluated_records(
+        self,
+        *,
+        destination_records_path: str,
+        source_records: List[Dict[str, Any]],
+        evaluated_records: List[Dict[str, Any]],
+        in_place: bool,
+    ) -> None:
+        if in_place:
+            persisted_records: List[Dict[str, Any]] = []
+            completed = len(evaluated_records)
+            for index, source_record in enumerate(source_records):
+                persisted_record = dict(source_record)
+                if index < completed:
+                    persisted_record["evaluation"] = evaluated_records[index].get("evaluation")
+                persisted_records.append(persisted_record)
+            save_jsonl(persisted_records, destination_records_path)
+            return
+
+        compact_records = [
+            {"evaluation": record.get("evaluation")}
+            for record in evaluated_records
+        ]
+        save_jsonl(compact_records, destination_records_path)
+
     def _save_result(self, result: TaskResult) -> str:
         """Save a TaskResult to JSON and return the output path."""
         path = self._build_result_path(result)
@@ -287,27 +338,48 @@ class Evaluator:
 
         destination = output_path or result_path
         destination_records_path = build_records_path(destination)
-        if destination == result_path:
-            evaluated_records = [
-                record for record in source_records if record.get("evaluation") is not None
-            ]
-            if not evaluated_records and os.path.exists(destination_records_path):
-                save_jsonl([], destination_records_path)
-        else:
-            evaluated_records = self._load_sample_records_from_paths(
+        in_place = _normalize_path(destination) == _normalize_path(result_path)
+
+        if os.path.exists(destination_records_path):
+            persisted_records = load_jsonl(destination_records_path)
+        elif not in_place and os.path.exists(destination):
+            persisted_records = self._load_sample_records_from_paths(
                 result_path=destination,
                 records_path=destination_records_path,
-            ) if os.path.exists(destination_records_path) or os.path.exists(destination) else []
+            )
+        else:
+            persisted_records = []
 
-        if len(evaluated_records) > len(source_records):
-            evaluated_records = evaluated_records[: len(source_records)]
-            save_jsonl(evaluated_records, destination_records_path)
+        evaluated_records = self._merge_evaluated_records(source_records, persisted_records)
+        resumed_evaluations = len(evaluated_records)
 
-        for source_record in source_records[len(evaluated_records):]:
+        for index in tqdm(
+            range(len(evaluated_records), len(source_records)),
+            initial=len(evaluated_records),
+            total=len(source_records),
+            desc=f"Evaluating {task.task_name}",
+        ):
+            source_record = source_records[index]
             evaluated_record = dict(source_record)
             evaluated_record["evaluation"] = task.evaluate_record(source_record)
-            append_jsonl(evaluated_record, destination_records_path)
             evaluated_records.append(evaluated_record)
+            if in_place:
+                self._save_evaluated_records(
+                    destination_records_path=destination_records_path,
+                    source_records=source_records,
+                    evaluated_records=evaluated_records,
+                    in_place=True,
+                )
+            else:
+                append_jsonl({"evaluation": evaluated_record["evaluation"]}, destination_records_path)
+
+        if in_place or persisted_records:
+            self._save_evaluated_records(
+                destination_records_path=destination_records_path,
+                source_records=source_records,
+                evaluated_records=evaluated_records,
+                in_place=in_place,
+            )
 
         metrics = task.aggregate_metrics_from_records(evaluated_records)
         evaluations = data.get("evaluations") or {}
@@ -320,6 +392,7 @@ class Evaluator:
         metadata["source_result_path"] = result_path
         metadata["source_sample_results_path"] = build_records_path(result_path)
         metadata["sample_results_path"] = destination_records_path
+        metadata["resumed_evaluations"] = resumed_evaluations
 
         updated = self._build_summary_payload(
             task_name=data.get("task_name") or task.task_name,

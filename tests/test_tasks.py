@@ -167,7 +167,7 @@ class TestHealthBenchTask:
             "conversation": [
                 {"role": "user", "content": "I have a headache, what should I do?"}
             ],
-            "rubrics": [{"criterion": "Suggests OTC pain relief", "weight": 1.0}],
+            "rubrics": [{"criterion": "Suggests OTC pain relief", "points": 5}],
         }
         messages = self.task.build_messages(sample)
         assert messages[0]["role"] == "system"
@@ -198,7 +198,7 @@ class TestHealthBenchTask:
         assert messages[1]["content"] == "Make a 3 months plan to address my mild postpartum depression."
 
     def test_evaluate_without_grader(self):
-        samples = [{"rubrics": [{"criterion": "test", "weight": 1.0}]}]
+        samples = [{"rubrics": [{"criterion": "test", "points": 5}]}]
         predictions = ["This is a response with several words."]
         metrics = self.task.evaluate(samples, predictions)
         assert "avg_response_length" in metrics
@@ -206,14 +206,14 @@ class TestHealthBenchTask:
     def test_serialize_sample_for_evaluation(self):
         sample = {
             "conversation": [{"role": "user", "content": "headache?"}],
-            "rubrics": [{"criterion": "Recommends rest", "weight": 1.0}],
+            "rubrics": [{"criterion": "Recommends rest", "points": 5}],
             "extra": "ignored",
         }
         assert self.task.serialize_sample_for_evaluation(sample) == {
             "conversation": [{"role": "user", "content": "headache?"}],
             "prompt": None,
             "question": None,
-            "rubrics": [{"criterion": "Recommends rest", "weight": 1.0}],
+            "rubrics": [{"criterion": "Recommends rest", "points": 5}],
             "criteria": [],
         }
 
@@ -226,8 +226,8 @@ class TestHealthBenchTask:
             {
                 "conversation": [{"role": "user", "content": "headache?"}],
                 "rubrics": [
-                    {"criterion": "Recommends rest", "weight": 1.0},
-                    {"criterion": "Suggests hydration", "weight": 1.0},
+                    {"criterion": "Recommends rest", "points": 6},
+                    {"criterion": "Suggests hydration", "points": 4},
                 ],
             }
         ]

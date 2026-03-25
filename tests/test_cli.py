@@ -140,7 +140,7 @@ class TestCliEvaluate:
                     "evaluation_samples": [
                         {
                             "conversation": [{"role": "user", "content": "headache?"}],
-                            "rubrics": [{"criterion": "Recommends rest", "weight": 1.0}],
+                            "rubrics": [{"criterion": "Recommends rest", "points": 5}],
                             "criteria": [],
                         }
                     ],
@@ -203,7 +203,7 @@ class TestCliEvaluate:
                     "evaluation_samples": [
                         {
                             "conversation": [{"role": "user", "content": "headache?"}],
-                            "rubrics": [{"criterion": "Recommends rest", "weight": 1.0}],
+                            "rubrics": [{"criterion": "Recommends rest", "points": 5}],
                             "criteria": [],
                         }
                     ],
@@ -273,7 +273,7 @@ class TestCliEvaluate:
                     "evaluation_samples": [
                         {
                             "conversation": [{"role": "user", "content": "headache?"}],
-                            "rubrics": [{"criterion": "Recommends rest", "weight": 1.0}],
+                            "rubrics": [{"criterion": "Recommends rest", "points": 5}],
                             "criteria": [],
                         }
                     ],

@@ -49,6 +49,15 @@ Install Azure support only:
 uv sync --extra azure
 ```
 
+## CI
+
+The repository includes a GitHub Actions workflow at `.github/workflows/pytest.yml`.
+It runs the full `pytest` suite for pull requests targeting `main` and for direct pushes to `main`.
+
+The workflow is intentionally scoped to a single Python version and cancels superseded runs for the same branch or PR to reduce CI cost.
+
+To make this a hard merge gate, configure your GitHub branch protection rule or ruleset for `main` to require the `pytest` status check before merging.
+
 ## Quick Start
 
 ### List available tasks and models
@@ -154,6 +163,8 @@ For tasks such as `healthbench`, deferred evaluation lets you use a dedicated gr
 Both `--model-config` and `--grader-config` reuse entries from [configs/models/default.yaml](configs/models/default.yaml), so provider-specific fields such as `base_url`, `api_key_env`, `endpoint_env`, and `api_version` only need to be defined once.
 
 When `--output-file` is omitted, `evaluate` now writes to a separate file under `results/evaluated/...` and appends a grader marker such as `__graded-by-azure-gpt-4o.json`, leaving the original generation result untouched. Evaluated outputs also have a same-named JSONL sidecar so rubric grading can be checkpointed and resumed.
+
+During `evaluate`, the CLI shows a progress bar and the evaluated JSONL sidecar stores only per-sample evaluation payloads, while the original generation JSONL remains the source of truth for predictions and serialized samples.
 
 ### Validate task configuration
 
