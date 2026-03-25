@@ -184,10 +184,8 @@ def compute_bootstrap_stats(
     rng = np.random.RandomState(seed)
     arr = np.array(values)
     mean = float(np.clip(np.mean(arr), 0.0, 1.0))
-    bootstrap_means = [
-        float(np.clip(np.mean(rng.choice(arr, size=len(arr), replace=True)), 0.0, 1.0))
-        for _ in range(n_bootstrap)
-    ]
+    bootstrap_indices = rng.choice(len(arr), size=(n_bootstrap, len(arr)), replace=True)
+    bootstrap_means = np.clip(np.mean(arr[bootstrap_indices], axis=1), 0.0, 1.0)
     return {
         "mean": mean,
         "bootstrap_std": float(np.std(bootstrap_means)),
