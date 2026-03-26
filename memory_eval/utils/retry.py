@@ -7,6 +7,7 @@ from typing import Callable, Optional, TypeVar
 
 
 T = TypeVar("T")
+STRING_RESPONSE_CHOICES_ERROR = "'str' object has no attribute 'choices'"
 
 
 class RetryHandler:
@@ -81,6 +82,9 @@ class RetryHandler:
             status_code = getattr(exc, "status_code", None)
             return status_code == 429 or (status_code is not None and status_code >= 500)
 
+        if isinstance(exc, AttributeError) and str(exc) == STRING_RESPONSE_CHOICES_ERROR:
+            return True
+
         status_code = getattr(exc, "status_code", None)
         if status_code is not None:
             return status_code == 429 or status_code >= 500
@@ -102,10 +106,11 @@ class RetryHandler:
                 last_error = exc
                 if attempt >= self.max_retries or not self.is_retryable_error(exc):
                     raise
-                print(
+                message = (
                     f"Operation failed with retryable error: {exc}.\n"
                     f"Retrying attempt {attempt + 1}/{self.max_retries}..."
                 )
+                print(message)
                 self._sleep(self.compute_delay(attempt))
 
         if last_error is not None:
