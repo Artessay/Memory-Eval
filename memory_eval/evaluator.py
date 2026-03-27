@@ -166,7 +166,6 @@ class Evaluator:
                 "generation_config": generation_config,
                 "model": model_info,
                 "sample_results_path": records_path,
-                "resumed_samples": len(existing_records),
             }
         )
         result.metadata["result_path"] = self._save_result(result)
