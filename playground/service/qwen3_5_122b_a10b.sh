@@ -25,11 +25,13 @@ if [ "$BACKEND" = "vllm" ]; then
         --tensor-parallel-size "$TP" \
         --dtype auto \
         --enable-expert-parallel \
+        --enable-prefix-caching \
         --enable-chunked-prefill \
         --language-model-only \
         --reasoning-parser qwen3 \
-        --enable-prefix-caching \
         --trust-remote-code \
+        --max-num-seqs 1 \
+        --max-model-len 32768 \
         --gpu-memory-utilization 0.90 \
         --served-model-name "qwen3.5-122b-a10b"
 
