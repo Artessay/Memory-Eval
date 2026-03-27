@@ -23,6 +23,13 @@ gemini-2.0-flash:
   input_cost_per_m: 0.10
   output_cost_per_m: 0.40
 
+azure-gpt-4.1:
+  backend: azure
+  model: gpt-4.1
+  endpoint_env: AZURE_OPENAI_ENDPOINT
+  api_key_env: AZURE_OPENAI_API_KEY
+  api_version: 2024-08-01-preview
+
 azure-gpt-4o:
   backend: azure
   model: gpt-4o
@@ -37,3 +44,12 @@ claude-3-5-sonnet:
   api_key_env: ANTHROPIC_API_KEY
   input_cost_per_m: 3.00
   output_cost_per_m: 15.00
+
+qwen3.5-122b-a10b:
+  backend: openai
+  model: qwen3.5-122b-a10b
+  base_url: http://localhost:8000/v1
+  api_key: EMPTY
+  extra_body:
+    chat_template_kwargs:
+      enable_thinking: false

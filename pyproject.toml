@@ -31,7 +31,15 @@ hf = [
 azure = [
     "azure-identity",
 ]
+sglang = [
+    "sglang[all]>=0.4",
+]
+vllm = [
+    "vllm",
+]
 dev = [
+    "gpustat",
+    "nvitop",
     "pytest",
     "pytest-asyncio",
 ]

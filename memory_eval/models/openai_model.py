@@ -23,6 +23,7 @@ class OpenAIModel(BaseModel):
     ):
         super().__init__(model_name, **kwargs)
         load_project_env()
+        self._default_generate_kwargs = dict(kwargs)
 
         try:
             from openai import OpenAI
@@ -42,13 +43,14 @@ class OpenAIModel(BaseModel):
         temperature: float = 0.0,
         **kwargs,
     ) -> str:
+        merged = {**self._default_generate_kwargs, **kwargs}
         response = self.retry_handler.run(
             lambda: self._client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
-                **kwargs,
+                **merged,
             )
         )
         return response.choices[0].message.content or ""
