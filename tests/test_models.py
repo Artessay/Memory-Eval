@@ -37,6 +37,7 @@ class TestOpenAIModel:
             model = OpenAIModel.__new__(OpenAIModel)
             model.model_name = "gpt-4o"
             model.retry_handler = RetryHandler(max_retries=2, base_delay=0.0, max_delay=0.0, jitter=0.0)
+            model._default_generate_kwargs = {}
 
             mock_client = MagicMock()
             mock_response = MagicMock()
@@ -54,6 +55,7 @@ class TestOpenAIModel:
             model = OpenAIModel.__new__(OpenAIModel)
             model.model_name = "gpt-4o"
             model.retry_handler = RetryHandler(max_retries=2, base_delay=0.0, max_delay=0.0, jitter=0.0)
+            model._default_generate_kwargs = {}
 
             mock_client = MagicMock()
             mock_response = MagicMock()
@@ -77,6 +79,7 @@ class TestAzureOpenAIModel:
             model = AzureOpenAIModel.__new__(AzureOpenAIModel)
             model.model_name = "gpt-4o"
             model.retry_handler = RetryHandler(max_retries=2, base_delay=0.0, max_delay=0.0, jitter=0.0)
+            model._default_generate_kwargs = {}
 
             mock_client = MagicMock()
             mock_response = MagicMock()

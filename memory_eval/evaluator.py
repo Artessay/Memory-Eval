@@ -391,7 +391,7 @@ class Evaluator:
         metadata["source_result_path"] = result_path
         metadata["source_sample_results_path"] = build_records_path(result_path)
         metadata["sample_results_path"] = destination_records_path
-        metadata["resumed_evaluations"] = resumed_evaluations
+        # metadata["resumed_evaluations"] = resumed_evaluations
 
         updated = self._build_summary_payload(
             task_name=data.get("task_name") or task.task_name,
