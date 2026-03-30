@@ -14,25 +14,25 @@
     "limit": null
   },
   "metrics": {
-    "rubric_score": 0.55085595144825,
+    "rubric_score": 0.5441033398338614,
     "num_graded": 5000
   },
   "num_samples": 5000,
   "evaluations": {
-    "grader__healthbench__openai__qwen3.5-122b-a10b": {
+    "grader__healthbench__azure__gpt-4.1": {
       "metrics": {
-        "rubric_score": 0.55085595144825,
+        "rubric_score": 0.5441033398338614,
         "num_graded": 5000
       },
       "grader": {
-        "config": "qwen3.5-122b-a10b",
-        "backend": "openai",
-        "model_name": "qwen3.5-122b-a10b"
+        "config": "azure-gpt-4.1",
+        "backend": "azure",
+        "model_name": "gpt-4.1"
       }
     }
   },
   "metadata": {
-    "sample_results_path": "results/evaluated/healthbench/azure/gpt-4.1/subset-standard__max_tokens-4096__temperature-0.0__limit-all__graded-by-openai-qwen3.5-122b-a10b.jsonl",
+    "sample_results_path": "results/evaluated/healthbench/azure/gpt-4.1/subset-standard__max_tokens-4096__temperature-0.0__limit-all__graded-by-azure-gpt-4.1.jsonl",
     "source_result_path": "results/healthbench/azure/gpt-4.1/subset-standard__max_tokens-4096__temperature-0.0__limit-all.json",
     "source_sample_results_path": "results/healthbench/azure/gpt-4.1/subset-standard__max_tokens-4096__temperature-0.0__limit-all.jsonl"
   }
