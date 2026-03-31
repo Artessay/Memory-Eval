@@ -53,6 +53,9 @@ all = [
 [project.scripts]
 memory-eval = "memory_eval.cli:main"
 
+[tool.uv]
+no-build-package = ["vllm", "sglang"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["memory_eval"]
 
