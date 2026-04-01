@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "task_name": "healthbench",
+  "task_config": {
+    "subset": "standard"
+  },
+  "model": {
+    "backend": "openai",
+    "model_name": "qwen3.5-122b-a10b"
+  },
+  "generation_config": {
+    "max_tokens": 4096,
+    "temperature": 0.0,
+    "limit": null
+  },
+  "metrics": {},
+  "num_samples": 5000,
+  "evaluations": {},
+  "metadata": {
+    "sample_results_path": "results/healthbench/openai/qwen3.5-122b-a10b/subset-standard__max_tokens-4096__temperature-0.0__limit-all.jsonl"
+  }
+}
