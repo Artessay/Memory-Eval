@@ -46,7 +46,6 @@ dev = [
 
 all = [
     "memory_eval[dev]",
-    "memory_eval[azure]",
     "memory_eval[hf]",
 ]
 
