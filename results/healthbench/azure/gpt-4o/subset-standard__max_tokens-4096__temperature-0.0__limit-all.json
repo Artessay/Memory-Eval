@@ -1,0 +1,22 @@
+{
+  "schema_version": 2,
+  "task_name": "healthbench",
+  "task_config": {
+    "subset": "standard"
+  },
+  "model": {
+    "backend": "azure",
+    "model_name": "gpt-4o"
+  },
+  "generation_config": {
+    "max_tokens": 4096,
+    "temperature": 0.0,
+    "limit": null
+  },
+  "metrics": {},
+  "num_samples": 5000,
+  "evaluations": {},
+  "metadata": {
+    "sample_results_path": "results/healthbench/azure/gpt-4o/subset-standard__max_tokens-4096__temperature-0.0__limit-all.jsonl"
+  }
+}
