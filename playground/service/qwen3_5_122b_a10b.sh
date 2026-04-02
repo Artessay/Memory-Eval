@@ -5,6 +5,8 @@
 # After launch, set in your env or .env:
 #   OPENAI_BASE_URL=http://localhost:8000/v1
 #   OPENAI_API_KEY=dummy
+#
+# modelscope download --model Qwen/Qwen3.5-122B-A10B --local_dir /data/Qwen/Qwen3.5-122B-A10B
 
 set -euo pipefail
 

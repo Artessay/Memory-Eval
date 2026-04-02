@@ -33,6 +33,8 @@ conda activate memory-eval
 Install packages using `uv`:
 
 ```bash
+pip install uv
+
 export UV_PROJECT_ENVIRONMENT="$(python -c 'import sys; print(sys.prefix)')"
 uv sync
 ```
@@ -47,6 +49,12 @@ Install Azure support only:
 
 ```bash
 uv sync --extra azure
+```
+
+Install vllm:
+
+```bash
+uv pip install vllm --torch-backend=auto
 ```
 
 ## CI
