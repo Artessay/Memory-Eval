@@ -34,7 +34,7 @@ if [ "$BACKEND" = "vllm" ]; then
         --trust-remote-code \
         --max-num-seqs 1 \
         --max-model-len 32768 \
-        --gpu-memory-utilization 0.90 \
+        --gpu-memory-utilization 0.75 \
         --served-model-name "qwen3.5-122b-a10b"
 
 else
